@@ -17,6 +17,12 @@
 - **Footer UI Polish**
   - Glass-card footer with rounded top, blur, and clearer border for readability
   - File: `frontend/src/app/page.tsx`
+- **WS Payload: Auction ID**
+  - `auction_status` now includes `id` (active auction ID)
+  - Frontend reads `auctionState.id` to route API calls
+- **Queue Limits Fetching**
+  - `PledgeQueue` no longer falls back to WS data for min/max limits
+  - It uses `/api/pledges/max-pledge/:auctionId` exclusively and shows a subtle error note if unavailable
 - **Synchronized Countdown + Richer WS Payload**
   - Backend `auction_status` now includes: `totalTokens`, `ceilingMarketCap`, `currentMarketCap`, `refundedBTC`, `minPledge`, `maxPledge`, `startTime`, `endTime`, `serverTime`, and `ceilingReached`.
   - Frontend countdown now ticks locally but is synchronized using `endTimeMs` and `serverTimeMs` for consistency across all clients.

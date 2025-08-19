@@ -17,9 +17,10 @@ const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, wa
 
   // Set auction ID when auction status changes
   useEffect(() => {
-    if (auctionState?.isActive) {
-      // In a real app, we would get the actual auction ID from the auction status
-      setAuctionId('active-auction-id');
+    if (auctionState?.isActive && typeof auctionState.id === 'string' && auctionState.id) {
+      setAuctionId(auctionState.id);
+    } else {
+      setAuctionId('');
     }
   }, [auctionState]);
 

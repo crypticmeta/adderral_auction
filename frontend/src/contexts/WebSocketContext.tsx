@@ -99,6 +99,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     }
 
     const state: AuctionState = {
+      id: typeof data.id === 'string' ? data.id : undefined,
       config: {
         totalTokens: String(totalTokensNum),
         ceilingMarketCapUSD: String(ceilingMarketCapNum),

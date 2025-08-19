@@ -29,7 +29,7 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
     maxPledgeUSD: number;
   } | null>(null);
   
-  const { socket, isAuthenticated } = useWebSocket();
+  const { socket, isAuthenticated, auctionState } = useWebSocket();
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
   
   // Fetch max pledge info
@@ -48,7 +48,23 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
     };
     
     fetchMaxPledgeInfo();
-  }, [auctionId, apiUrl]);
+
+    // Subscribe to real-time events and refetch limits immediately
+    if (socket && isAuthenticated) {
+      const refetchLimits = () => fetchMaxPledgeInfo();
+      socket.on('pledge:queue:update', refetchLimits);
+      socket.on('pledge_created', refetchLimits);
+      socket.on('pledge:processed', refetchLimits);
+    }
+
+    return () => {
+      if (socket) {
+        socket.off('pledge:queue:update');
+        socket.off('pledge_created');
+        socket.off('pledge:processed');
+      }
+    };
+  }, [auctionId, apiUrl, socket, isAuthenticated]);
   
   // Fetch pledges in queue
   useEffect(() => {
@@ -70,9 +86,9 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
     
     fetchPledges();
     
-    // Set up WebSocket listeners for real-time updates
+    // Set up WebSocket listeners for real-time queue updates
     if (socket && isAuthenticated) {
-      socket.on('pledge:created', (data: any) => {
+      socket.on('pledge_created', (data: any) => {
         if (data.auctionId === auctionId) {
           fetchPledges();
         }
@@ -84,18 +100,16 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
         }
       });
       
-      socket.on('queue:updated', (data: any) => {
-        if (data.auctionId === auctionId) {
-          fetchPledges();
-        }
+      socket.on('pledge:queue:update', (_data: any) => {
+        fetchPledges();
       });
     }
     
     return () => {
       if (socket) {
-        socket.off('pledge:created');
+        socket.off('pledge_created');
         socket.off('pledge:processed');
-        socket.off('queue:updated');
+        socket.off('pledge:queue:update');
       }
     };
   }, [auctionId, apiUrl, socket, isAuthenticated]);
@@ -145,10 +159,16 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
     <div className="bg-gradient-to-br from-dark-800/50 to-dark-700/50 backdrop-blur-md border border-primary-500/30 rounded-xl p-6 transition-all hover:border-primary-500/60 hover:shadow-glow-md">
       <h2 className="text-2xl font-semibold mb-2 text-white">Pledge Queue</h2>
       
-      {error && (
+      {error ? (
         <div className="bg-gradient-to-r from-red-600/20 to-red-700/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg mb-4 text-sm">
           {error}
         </div>
+      ) : (
+        !maxPledgeInfo && (
+          <div className="bg-dark-900/40 border border-white/5 text-gray-400 px-4 py-2 rounded-lg mb-4 text-xs">
+            Attempting to load pledge limits...
+          </div>
+        )
       )}
       
       {maxPledgeInfo && (
@@ -165,7 +185,7 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
             </div>
             <div>
               <span className="text-gray-400">BTC Price:</span>
-              <span className="ml-2">${maxPledgeInfo.currentBTCPrice.toLocaleString()}</span>
+              <span className="ml-2">{maxPledgeInfo.currentBTCPrice ? `$${maxPledgeInfo.currentBTCPrice.toLocaleString()}` : '—'}</span>
             </div>
           </div>
         </div>

@@ -17,6 +17,8 @@ export interface AuctionConfig {
 }
 
 export interface AuctionState {
+    // Active auction identifier (from backend WS payload)
+    id?: string;
     config: AuctionConfig;
     totalRaised: number;
     refundedBTC: number;

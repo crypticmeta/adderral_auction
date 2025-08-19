@@ -174,16 +174,11 @@ export class PledgeQueueService {
     const totalPledgedIncludingQueue = currentTotalPledged + queuedBTC;
     const remainingBeforeCeiling = ceilingMarketCap - totalPledgedIncludingQueue;
     
-    // Calculate max amount (cap at maxPledge)
-    let maxAmount = Math.min(remainingBeforeCeiling, maxPledge);
-    
-    // If max amount is less than min pledge, return min pledge
-    // This means we'll exceed ceiling, but we need to allow at least min pledge
-    if (maxAmount < minPledge) {
-      maxAmount = minPledge;
-    }
-    
-    return maxAmount;
+    // Calculate max amount (cap at maxPledge). Do NOT force it up to min when remaining is below min.
+    // This avoids telling clients they can pledge min when remaining is actually lower.
+    const cappedByCeiling = Math.min(remainingBeforeCeiling, maxPledge);
+    const safeMax = Math.max(0, cappedByCeiling);
+    return safeMax;
   }
 
   /**

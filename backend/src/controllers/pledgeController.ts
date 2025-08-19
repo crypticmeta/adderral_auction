@@ -210,9 +210,9 @@ export const getPledges = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Auction ID is required' });
     }
 
-    // Get all pledges for this auction ordered by timestamp (oldest first for FCFS)
+    // Get only UNCONFIRMED (not verified) pledges for this auction, oldest first
     const pledges = await prisma.pledge.findMany({
-      where: { auctionId },
+      where: { auctionId, verified: false },
       orderBy: { timestamp: 'asc' }
     });
     

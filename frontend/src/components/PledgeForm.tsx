@@ -21,16 +21,17 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
   } | null>(null);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   
-  const { auctionStatus, isAuthenticated, socket } = useWebSocket();
+  const { auctionState, isAuthenticated, socket } = useWebSocket();
   
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
   
-  // Fetch max pledge info (single seeded auction)
+  // Fetch max pledge info (active auction) and refetch on real-time events
   useEffect(() => {
+    const auctionId = auctionState?.id;
+    if (!auctionId) return;
+
     const fetchMaxPledgeInfo = async () => {
       try {
-        // Use the single seeded auction ID (only one auction exists)
-        const auctionId = '3551190a-c374-4089-a4b0-35912e65ebdd';
         const response = await fetch(`${apiUrl}/api/pledges/max-pledge/${auctionId}`);
         if (!response.ok) {
           throw new Error('Failed to fetch max pledge info');
@@ -41,22 +42,24 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
         console.error('Error fetching max pledge info:', err);
       }
     };
-    
+
     fetchMaxPledgeInfo();
-    
-    // Set up socket listener for queue updates
+
     if (socket) {
-      socket.on('pledge:processed', () => {
-        fetchMaxPledgeInfo(); // Refresh max pledge info when a pledge is processed
-      });
+      const refetch = () => fetchMaxPledgeInfo();
+      socket.on('pledge:queue:update', refetch);
+      socket.on('pledge:created', refetch);
+      socket.on('pledge:processed', refetch);
     }
-    
+
     return () => {
       if (socket) {
+        socket.off('pledge:queue:update');
+        socket.off('pledge:created');
         socket.off('pledge:processed');
       }
     };
-  }, [apiUrl, socket]);
+  }, [apiUrl, socket, auctionState?.id]);
 
   const handlePledge = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,7 +164,9 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
     }
   };
 
-  const isAuctionActive = auctionStatus?.isActive ?? false;
+  const isAuctionActive = auctionState?.isActive ?? false;
+  const belowMinCapacity = !!maxPledgeInfo && maxPledgeInfo.maxPledge < maxPledgeInfo.minPledge;
+  const zeroCapacity = !!maxPledgeInfo && maxPledgeInfo.maxPledge <= 0;
 
   return (
     <div className="bg-gradient-to-br from-dark-800/50 to-dark-700/50 backdrop-blur-md border border-primary-500/30 rounded-xl p-6 transition-all hover:border-primary-500/60 hover:shadow-glow-md">
@@ -170,7 +175,7 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
         Pledge BTC to secure your ACORN token allocation. First come, first served until ceiling is reached.
       </p>
       
-      {auctionStatus?.ceilingReached && (
+      {auctionState?.ceilingReached && (
         <div className="bg-gradient-to-r from-amber-600/20 to-amber-700/20 border border-amber-500/30 text-amber-400 px-4 py-3 rounded-lg mb-4 text-sm">
           <div className="flex items-center">
             <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -184,6 +189,12 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
       {error && (
         <div className="bg-gradient-to-r from-red-600/20 to-red-700/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg mb-4 text-sm">
           {error}
+        </div>
+      )}
+
+      {(belowMinCapacity || zeroCapacity) && (
+        <div className="bg-gradient-to-r from-amber-600/20 to-amber-700/20 border border-amber-500/30 text-amber-400 px-4 py-3 rounded-lg mb-4 text-sm">
+          Remaining capacity is below the minimum pledge. Pledging is temporarily paused.
         </div>
       )}
       
@@ -238,12 +249,12 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
               value={btcAmount}
               onChange={(e) => setBtcAmount(e.target.value)}
               step="0.001"
-              min={String(auctionStatus?.minPledge || 0.001)}
-              max={String(auctionStatus?.maxPledge || 0.5)}
+              min={maxPledgeInfo ? String(maxPledgeInfo.minPledge) : undefined}
+              max={maxPledgeInfo ? String(maxPledgeInfo.maxPledge) : undefined}
               className="w-full px-3 py-2 bg-dark-900/50 border border-primary-500/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 pr-12 text-gray-200 placeholder-gray-500"
               placeholder="0.01"
               required
-              disabled={!isWalletConnected || !isAuctionActive || isLoading || (pledgeData && !pledgeData.verified)}
+              disabled={!isWalletConnected || !isAuctionActive || isLoading || (pledgeData && !pledgeData.verified) || belowMinCapacity || zeroCapacity}
             />
             <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-gray-400 text-sm">
               BTC
@@ -258,7 +269,7 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
         
         <button
           type="submit"
-          disabled={!isWalletConnected || !isAuctionActive || isLoading || !!pledgeData}
+          disabled={!isWalletConnected || !isAuctionActive || isLoading || !!pledgeData || belowMinCapacity || zeroCapacity}
           className="w-full bg-gradient-to-r from-primary-500 to-primary-600 text-white py-2.5 px-4 rounded-lg hover:from-primary-600 hover:to-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-primary-500/25 font-medium"
         >
           {isLoading ? 'Processing...' : 'Pledge Now'}

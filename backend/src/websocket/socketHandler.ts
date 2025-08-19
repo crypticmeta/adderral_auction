@@ -210,6 +210,7 @@ export const sendAuctionStatus = async (socket: any) => {
 
     // Send auction status to client (include key config + timing fields)
     socket.emit('auction_status', {
+      id: auction.id,
       isActive: auction.isActive,
       isCompleted: auction.isCompleted,
       totalBTCPledged: auction.totalBTCPledged,
