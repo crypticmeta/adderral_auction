@@ -251,21 +251,21 @@ Refund mechanism:
 ## Tech Stack
 
 ### Frontend
-- Next.js 15 with App Router
-- TypeScript
-- Tailwind CSS v3 (PostCSS 8)
-- Radix UI (Accordion, Dialog, Popover, Dropdown Menu, Tabs, Tooltip)
-- Bitcoin Wallet Adapter (Unisat, Xverse, Leather)
-- Socket.io Client
-- Redux Toolkit
+- Next.js + TypeScript + TailwindCSS
+- Realtime via Socket.IO client
+- Uses `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL`
+
+### Recent Activity / Pledge Queue UI
+
+- Random avatars per user via DiceBear seeded by their address/userId
+- Usernames are truncated addresses (e.g. `bc1qxyz...9a2f`)
+- Shows estimated ACORN allocation for each pledge based on current totals
+- Realtime updates on `pledge_created`, `pledge:processed`, `pledge:queue:update`
 
 ### Backend
-- Express server with TypeScript
-- Prisma ORM for database access
-- Redis for caching auction data and Bitcoin price
-- Socket.io for real-time updates
-- Axios for external API requests
-- Scheduled tasks for time-based operations
+- Node + TypeScript + Express
+- Prisma + Postgres
+- Redis (queue + Socket.IO adapter)
 
 ## Notes
 

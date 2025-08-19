@@ -213,7 +213,15 @@ export const getPledges = async (req: Request, res: Response) => {
     // Get only UNCONFIRMED (not verified) pledges for this auction, oldest first
     const pledges = await prisma.pledge.findMany({
       where: { auctionId, verified: false },
-      orderBy: { timestamp: 'asc' }
+      orderBy: { timestamp: 'asc' },
+      include: {
+        user: {
+          select: {
+            cardinal_address: true,
+            ordinal_address: true,
+          }
+        }
+      }
     });
     
     // Enrich pledges with queue position, processed status, and refund status

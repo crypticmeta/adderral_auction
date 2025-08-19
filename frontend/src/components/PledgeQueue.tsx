@@ -1,4 +1,8 @@
 // PledgeQueue component for displaying pledge queue status
+// Component: PledgeQueue
+// Shows recent pledge activity with user avatars (random via DiceBear),
+// truncated usernames from addresses, real-time queue updates, and
+// estimated ACORN allocations per pledge based on current auction totals.
 import React, { useState, useEffect } from 'react';
 import { useWebSocket } from '../contexts/WebSocketContext';
 
@@ -11,9 +15,14 @@ interface QueuedPledge {
   userId: string;
   btcAmount: number;
   timestamp: string;
-  position: number;
+  position?: number; // legacy client
+  queuePosition?: number; // from API enrich
   processed: boolean;
   needsRefund: boolean;
+  user?: {
+    cardinal_address?: string | null;
+    ordinal_address?: string | null;
+  };
 }
 
 const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
@@ -30,6 +39,34 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
   } | null>(null);
   
   const { socket, isAuthenticated, auctionState } = useWebSocket();
+
+  const getUsername = (p: QueuedPledge): string => {
+    const addr = p?.user?.ordinal_address || p?.user?.cardinal_address || p?.userId || '';
+    if (!addr) return 'guest';
+    const s = String(addr);
+    if (s.length <= 10) return s;
+    return `${s.slice(0, 6)}...${s.slice(-4)}`;
+  };
+
+  const getAvatar = (p: QueuedPledge): string => {
+    const seed = p?.user?.ordinal_address || p?.user?.cardinal_address || p?.userId || p.id;
+    return `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${encodeURIComponent(String(seed))}`;
+  };
+
+  const formatNumber = (n: number | null | undefined, maxFrac = 6): string => {
+    if (n == null || Number.isNaN(n)) return '—';
+    return Number(n).toLocaleString(undefined, { maximumFractionDigits: maxFrac });
+  };
+
+  const estimateAllocation = (btcAmount: number): number | null => {
+    const totalTokensStr = auctionState?.config?.totalTokens;
+    const totalRaisedBTC = auctionState?.totalRaised;
+    if (!totalTokensStr || typeof totalRaisedBTC !== 'number' || !(totalRaisedBTC > 0)) return null;
+    const totalTokens = Number(totalTokensStr);
+    if (!(totalTokens > 0)) return null;
+    // tokens = (totalTokens / totalRaisedBTC) * pledgeBTC
+    return (totalTokens / totalRaisedBTC) * btcAmount;
+  };
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
   
   // Fetch max pledge info
@@ -260,12 +297,12 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
             <table className="min-w-full divide-y divide-gray-700">
               <thead className="bg-dark-900/50">
                 <tr>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    Position
-                  </th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">User</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Position</th>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                     Amount
                   </th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Allocation</th>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                     Status
                   </th>
@@ -275,10 +312,17 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
                 {queuedPledges.slice(0, 10).map((pledge) => (
                   <tr key={pledge.id}>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      {pledge.processed ? '—' : pledge.position}
+                      <div className="flex items-center gap-3">
+                        <img src={getAvatar(pledge)} alt="avatar" className="w-7 h-7 rounded-full bg-dark-900/50 border border-white/10" />
+                        <span className="text-gray-200">{getUsername(pledge)}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm">{pledge.processed ? '—' : (pledge.queuePosition ?? pledge.position ?? '—')}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm">
+                      <span className="font-medium text-gray-200">{formatNumber(pledge.btcAmount)} BTC</span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      <span className="font-medium text-gray-200">{pledge.btcAmount} BTC</span>
+                      <span className="text-gray-300">{formatNumber(estimateAllocation(pledge.btcAmount) ?? null, 2)} ACORN</span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       {pledge.processed ? (

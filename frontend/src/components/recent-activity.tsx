@@ -1,5 +1,8 @@
-// Recent activity component showing latest auction pledges
+// Component: RecentActivity
+// Shows latest pledges with random avatars (DiceBear), truncated usernames,
+// and estimated ACORN allocations computed from current auction totals.
 import { AuctionActivity } from '@/types/auction';
+import { useWebSocket } from '../contexts/WebSocketContext';
 
 interface RecentActivityProps {
     activities: AuctionActivity[];
@@ -7,9 +10,35 @@ interface RecentActivityProps {
 }
 
 export function RecentActivity({ activities = [], isConnected = false }: RecentActivityProps) {
+    const { auctionState } = useWebSocket();
+
     const formatAddress = (address: string | null | undefined) => {
         if (!address) return 'Unknown';
         return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    };
+
+    const avatarFor = (address: string | null | undefined) => {
+        const seed = address || 'guest';
+        return `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${encodeURIComponent(seed)}`;
+    };
+
+    const formatNumber = (n: number | string | null | undefined, maxFrac = 6) => {
+        if (n == null) return '—';
+        const num = typeof n === 'string' ? Number(n) : n;
+        if (!isFinite(Number(num))) return '—';
+        return Number(num).toLocaleString(undefined, { maximumFractionDigits: maxFrac });
+    };
+
+    const estimateAllocation = (btcAmountStr: string | null | undefined): number | null => {
+        if (!btcAmountStr) return null;
+        const pledgeBTC = Number(btcAmountStr);
+        if (!(pledgeBTC > 0)) return null;
+        const totalTokensStr = auctionState?.config?.totalTokens;
+        const totalRaisedBTC = auctionState?.totalRaised;
+        if (!totalTokensStr || typeof totalRaisedBTC !== 'number' || !(totalRaisedBTC > 0)) return null;
+        const totalTokens = Number(totalTokensStr);
+        if (!(totalTokens > 0)) return null;
+        return (totalTokens / totalRaisedBTC) * pledgeBTC;
     };
 
     const formatTimeAgo = (timestamp: string | Date | null | undefined) => {
@@ -55,9 +84,11 @@ export function RecentActivity({ activities = [], isConnected = false }: RecentA
                                 data-testid={`activity-${activity.id}`}
                             >
                                 <div className="flex items-center space-x-3">
-                                    <div className="w-8 h-8 bg-gradient-to-r from-acorn-500 to-acorn-600 rounded-full p-1.5">
-                                        <img src="/acorn.png" alt="Activity" className="w-full h-full object-contain" />
-                                    </div>
+                                    <img
+                                        src={avatarFor(activity?.walletAddress)}
+                                        alt="avatar"
+                                        className="w-8 h-8 rounded-full bg-dark-900/50 border border-white/10"
+                                    />
                                     <div>
                                         <p className="font-semibold" data-testid={`activity-address-${activity.id}`}>
                                             {formatAddress(activity?.walletAddress)}
@@ -69,7 +100,7 @@ export function RecentActivity({ activities = [], isConnected = false }: RecentA
                                 </div>
                                 <div className="text-right">
                                     <p className="font-semibold text-cyan-400" data-testid={`activity-btc-${activity.id}`}>
-                                        {activity?.btcAmount ? parseFloat(activity.btcAmount).toFixed(3) : '0.000'} BTC
+                                        {formatNumber(activity?.btcAmount, 3)} BTC
                                         {activity?.refundedAmount && parseFloat(activity.refundedAmount) > 0 && (
                                             <span className="text-amber-400 ml-1 text-xs">
                                                 ({parseFloat(activity.refundedAmount).toFixed(3)} refunded)
@@ -77,7 +108,14 @@ export function RecentActivity({ activities = [], isConnected = false }: RecentA
                                         )}
                                     </p>
                                     <p className="text-sm text-gray-400" data-testid={`activity-tokens-${activity.id}`}>
-                                        ~{activity?.estimatedTokens ? parseInt(activity.estimatedTokens).toLocaleString() : '0'} ACORN
+                                        ~{(() => {
+                                            const est = estimateAllocation(activity?.btcAmount);
+                                            if (est == null) {
+                                                // fallback to payload if provided
+                                                return activity?.estimatedTokens ? Number(activity.estimatedTokens).toLocaleString() : '0';
+                                            }
+                                            return Number(est).toLocaleString(undefined, { maximumFractionDigits: 2 });
+                                        })()} ACORN*
                                         {activity?.isRefunded && (
                                             <span className="ml-1 text-xs text-amber-400">(refunded)</span>
                                         )}
@@ -88,6 +126,7 @@ export function RecentActivity({ activities = [], isConnected = false }: RecentA
                     })
                 )}
             </div>
+            <p className="mt-3 text-xs text-gray-500">* Estimated; final allocation may vary.</p>
         </div>
     );
 }
