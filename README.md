@@ -261,6 +261,7 @@ Refund mechanism:
 - Usernames are truncated addresses (e.g. `bc1qxyz...9a2f`)
 - Shows estimated ACORN allocation for each pledge based on current totals
 - Realtime updates on `pledge_created`, `pledge:processed`, `pledge:queue:update`
+- Recent Activity merges live queue entries with activity feed and displays a Tx Status badge (In Queue / Processed / Refunded / Confirmed)
 
 ### Backend
 - Node + TypeScript + Express
