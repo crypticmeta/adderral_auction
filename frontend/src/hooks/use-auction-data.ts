@@ -1,15 +1,15 @@
 // Hook for fetching and managing auction data
 import { useQuery, useMutation } from '@tanstack/react-query';
-import axios from 'axios';
+import http from '@/lib/http';
 import { AuctionState, PledgeData } from '@/types/auction';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+// Use relative paths with safe http wrapper to avoid SSRF/credential leakage
 
 export const useAuctionData = () => {
   return useQuery({
     queryKey: ['auctionData'],
     queryFn: async () => {
-      const response = await axios.get(`${API_URL}/auction/status`);
+      const response = await http.get<AuctionState>('/auction/status');
       return response.data as AuctionState;
     },
     refetchInterval: 30000, // Refetch every 30 seconds
@@ -20,7 +20,7 @@ export const useAuctionData = () => {
 export const usePledgeMutation = () => {
   return useMutation({
     mutationFn: async (pledgeData: PledgeData) => {
-      const response = await axios.post(`${API_URL}/auction/pledge`, pledgeData);
+      const response = await http.post('/auction/pledge', pledgeData);
       return response.data;
     }
   });

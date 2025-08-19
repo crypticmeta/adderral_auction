@@ -8,6 +8,7 @@ import { RecentActivity } from '@/components/recent-activity';
 import PledgeContainer from '@/components/PledgeContainer';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { ConnectMultiButton } from 'bitcoin-wallet-adapter';
+import http from '@/lib/http';
 
 export default function Home() {
   const [isWalletConnected, setIsWalletConnected] = useState(false);
@@ -62,22 +63,12 @@ export default function Home() {
     setResetMessage('');
 
     try {
-      // Simple API call for dev mode only
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/auction/reset`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setResetMessage(data.message || 'Auction reset successfully');
-        // Reload the page to reflect changes
-        window.location.reload();
-      } else {
-        throw new Error('Failed to reset auction');
-      }
+      // Dev-only reset via safe http wrapper (relative path enforced)
+      const response = await http.post('/auction/reset', {});
+      const data = response?.data as { message?: string } | undefined;
+      setResetMessage(data?.message || 'Auction reset successfully');
+      // Reload the page to reflect changes
+      window.location.reload();
     } catch (error) {
       console.error('Error resetting auction:', error);
       setResetMessage('Failed to reset auction. Please try again.');

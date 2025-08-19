@@ -10,14 +10,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
-# Copy manifests first
-COPY backend/package.json backend/yarn.lock ./
+# Copy manifests first (context is backend/ in CI)
+COPY package.json yarn.lock ./
 
 # Install all deps for build
 RUN yarn install --frozen-lockfile
 
 # Copy source
-COPY backend .
+COPY . .
 
 # Generate Prisma client
 RUN npx prisma generate
@@ -35,6 +35,7 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/src/generated ./dist/generated
 
 # Expose default port (match README/backend config)
 EXPOSE 5000

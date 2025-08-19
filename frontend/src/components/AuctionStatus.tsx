@@ -1,9 +1,9 @@
 // Auction status component with real-time updates from WebSocket
 import React from 'react';
-import { useWebSocket } from '../contexts/WebSocketContext';
+import { useWebSocket } from '@/hooks/use-websocket';
 
 const AuctionStatus: React.FC = () => {
-  const { auctionStatus, isConnected } = useWebSocket();
+  const { auctionState, isConnected } = useWebSocket();
 
   // Format remaining time
   const formatRemainingTime = (milliseconds: number): string => {
@@ -38,8 +38,12 @@ const AuctionStatus: React.FC = () => {
 
   // Calculate progress percentage toward ceiling market cap
   const calculateProgress = (): number => {
-    if (!auctionStatus || !auctionStatus.currentMarketCap || !auctionStatus.ceilingMarketCap) return 0;
-    return Math.min(100, (auctionStatus.currentMarketCap / auctionStatus.ceilingMarketCap) * 100);
+    if (!auctionState) return 0;
+    if (typeof auctionState.progressPercentage === 'number') return auctionState.progressPercentage;
+    if (auctionState.currentMarketCap && auctionState.ceilingMarketCap) {
+      return Math.min(100, (auctionState.currentMarketCap / auctionState.ceilingMarketCap) * 100);
+    }
+    return 0;
   };
 
   if (!isConnected) {
@@ -53,7 +57,7 @@ const AuctionStatus: React.FC = () => {
     );
   }
 
-  if (!auctionStatus) {
+  if (!auctionState) {
     return (
       <div className="bg-gradient-to-br from-dark-800/50 to-dark-700/50 backdrop-blur-md border border-primary-500/30 rounded-xl p-6">
         <div className="text-center py-8">
@@ -70,11 +74,11 @@ const AuctionStatus: React.FC = () => {
       <h2 className="text-2xl font-semibold mb-6 text-white">Auction Status</h2>
       
       {/* Auction status banner */}
-      <div className={`mb-6 p-4 rounded-lg ${auctionStatus.isActive ? 'bg-gradient-to-r from-green-600/20 to-green-700/20 border border-green-500/30 text-green-400' : 'bg-gradient-to-r from-red-600/20 to-red-700/20 border border-red-500/30 text-red-400'}`}>
+      <div className={`mb-6 p-4 rounded-lg ${auctionState.isActive ? 'bg-gradient-to-r from-green-600/20 to-green-700/20 border border-green-500/30 text-green-400' : 'bg-gradient-to-r from-red-600/20 to-red-700/20 border border-red-500/30 text-red-400'}`}>
         <div className="flex items-center">
-          <div className={`h-3 w-3 rounded-full mr-3 ${auctionStatus.isActive ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+          <div className={`h-3 w-3 rounded-full mr-3 ${auctionState.isActive ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
           <span className="font-medium">
-            {auctionStatus.isActive ? 'Auction is Active' : 'Auction has Ended'}
+            {auctionState.isActive ? 'Auction is Active' : 'Auction has Ended'}
           </span>
         </div>
       </div>
@@ -83,7 +87,7 @@ const AuctionStatus: React.FC = () => {
       <div className="mb-6">
         <div className="flex justify-between mb-2">
           <span className="text-sm font-medium text-gray-400">
-            {formatUSD(auctionStatus.currentMarketCap)} / {formatUSD(auctionStatus.ceilingMarketCap)}
+            {formatUSD(auctionState.currentMarketCap)} / {formatUSD(auctionState.ceilingMarketCap)}
           </span>
           <span className="text-sm font-medium text-white">{progress.toFixed(2)}%</span>
         </div>
@@ -102,13 +106,15 @@ const AuctionStatus: React.FC = () => {
         <div className="bg-gradient-to-br from-dark-900/50 to-dark-800/50 p-4 rounded-lg border border-primary-500/20">
           <h3 className="text-sm font-medium text-gray-400 mb-1">Time Remaining</h3>
           <p className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-accent-pink bg-clip-text text-transparent">
-            {auctionStatus.isActive ? formatRemainingTime(auctionStatus.remainingTime) : '00:00:00'}
+            {auctionState.isActive && auctionState.timeRemaining
+              ? `${String(auctionState.timeRemaining.hours ?? 0).padStart(2, '0')}:${String(auctionState.timeRemaining.minutes ?? 0).padStart(2, '0')}:${String(auctionState.timeRemaining.seconds ?? 0).padStart(2, '0')}`
+              : '00:00:00'}
           </p>
         </div>
         <div className="bg-gradient-to-br from-dark-900/50 to-dark-800/50 p-4 rounded-lg border border-primary-500/20">
           <h3 className="text-sm font-medium text-gray-400 mb-1">Current Token Price</h3>
           <p className="text-2xl font-bold bg-gradient-to-r from-accent-blue to-accent-cyan bg-clip-text text-transparent">
-            ${auctionStatus.currentPrice ? auctionStatus.currentPrice.toFixed(8) : '0.00000000'}
+            ${typeof auctionState.currentPrice === 'number' ? auctionState.currentPrice.toFixed(8) : '0.00000000'}
           </p>
         </div>
       </div>
@@ -118,31 +124,31 @@ const AuctionStatus: React.FC = () => {
         <h3 className="text-lg font-semibold mb-4 text-white">Auction Details</h3>
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div className="text-gray-400">Total Tokens for Sale</div>
-          <div className="font-medium text-right text-gray-200">{auctionStatus.totalTokens ? auctionStatus.totalTokens.toLocaleString() : '0'}</div>
+          <div className="font-medium text-right text-gray-200">{auctionState.config?.totalTokens ? Number(auctionState.config.totalTokens).toLocaleString() : '0'}</div>
           
           <div className="text-gray-400">Ceiling Market Cap</div>
-          <div className="font-medium text-right text-gray-200">{formatUSD(auctionStatus.ceilingMarketCap)}</div>
+          <div className="font-medium text-right text-gray-200">{formatUSD(auctionState.ceilingMarketCap)}</div>
           
           <div className="text-gray-400">Current Market Cap</div>
-          <div className="font-medium text-right text-gray-200">{formatUSD(auctionStatus.currentMarketCap)}</div>
+          <div className="font-medium text-right text-gray-200">{formatUSD(auctionState.currentMarketCap)}</div>
           
           <div className="text-gray-400">Total BTC Pledged</div>
-          <div className="font-medium text-right text-gray-200">{formatBTC(auctionStatus.totalBTCPledged)} BTC</div>
+          <div className="font-medium text-right text-gray-200">{formatBTC(auctionState.totalRaised)} BTC</div>
           
-          {auctionStatus.refundedBTC > 0 && (
+          {typeof auctionState.refundedBTC === 'number' && auctionState.refundedBTC > 0 && (
             <>
               <div className="text-gray-400">Refunded BTC</div>
-              <div className="font-medium text-right text-gray-200">{formatBTC(auctionStatus.refundedBTC)} BTC</div>
+              <div className="font-medium text-right text-gray-200">{formatBTC(auctionState.refundedBTC)} BTC</div>
             </>
           )}
           
           <div className="text-gray-400">Minimum Pledge</div>
-          <div className="font-medium text-right text-gray-200">{formatBTC(auctionStatus.minPledge)} BTC</div>
+          <div className="font-medium text-right text-gray-200">{formatBTC(typeof auctionState.minPledge === 'number' ? auctionState.minPledge : parseFloat(auctionState.config?.minPledgeBTC ?? '0'))} BTC</div>
           
           <div className="text-gray-400">Maximum Pledge</div>
-          <div className="font-medium text-right text-gray-200">{formatBTC(auctionStatus.maxPledge)} BTC</div>
+          <div className="font-medium text-right text-gray-200">{formatBTC(typeof auctionState.maxPledge === 'number' ? auctionState.maxPledge : parseFloat(auctionState.config?.maxPledgeBTC ?? '0'))} BTC</div>
           
-          {auctionStatus.ceilingReached && (
+          {auctionState.ceilingReached && (
             <div className="col-span-2 mt-2 p-2 bg-gradient-to-r from-amber-600/20 to-amber-700/20 border border-amber-500/30 text-amber-400 rounded-lg text-center">
               <span className="font-medium">Ceiling Market Cap Reached</span>
             </div>

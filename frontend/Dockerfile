@@ -8,14 +8,14 @@ WORKDIR /app
 # Install OS deps if needed (optional)
 RUN apk add --no-cache libc6-compat
 
-# Copy manifests first for better caching
-COPY frontend/package.json frontend/yarn.lock ./
+# Copy manifests first for better caching (context is frontend/)
+COPY package.json yarn.lock ./
 
 # Install deps (frozen lockfile for reproducibility)
 RUN yarn install --frozen-lockfile
 
 # Copy source
-COPY frontend .
+COPY . .
 
 # Build Next.js app
 ENV NODE_ENV=production
