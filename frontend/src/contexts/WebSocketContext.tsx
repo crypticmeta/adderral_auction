@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import io, { Socket } from 'socket.io-client';
 import { AuctionActivity, AuctionState } from '@/types/auction';
+import { useDebugLog } from '@/contexts/DebugLogContext';
 
 interface WebSocketContextType {
   isConnected: boolean;
@@ -38,6 +39,13 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [auctionState, setAuctionState] = useState<AuctionState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const debug = (() => {
+    try {
+      return useDebugLog();
+    } catch {
+      return null;
+    }
+  })();
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
   const wsUrl = process.env.NEXT_PUBLIC_WS_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -146,28 +154,33 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       newSocket.on('connect', () => {
         setIsConnected(true);
         console.log('Socket.IO connected');
+        debug?.addEntry('sys', 'connect');
       });
 
       newSocket.on('auth', (data) => {
         if (data.success) {
           setIsAuthenticated(true);
           console.log('Socket.IO authenticated');
+          debug?.addEntry('in', 'auth', data);
         }
       });
 
       newSocket.on('auction_status', (data) => {
+        debug?.addEntry('in', 'auction_status', data);
         setAuctionState(transformToAuctionState(data));
       });
 
       newSocket.on('error', (data) => {
         console.error('Socket.IO error:', data.message);
         setError(data.message);
+        debug?.addEntry('err', 'error', data);
       });
 
       newSocket.on('disconnect', () => {
         setIsConnected(false);
         setIsAuthenticated(false);
         console.log('Socket.IO disconnected');
+        debug?.addEntry('sys', 'disconnect');
       });
 
       newSocket.on('connect_error', (error) => {
@@ -175,11 +188,13 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         setIsConnected(false);
         setIsAuthenticated(false);
         setError('Failed to connect to auction server');
+        debug?.addEntry('err', 'connect_error', { message: String(error?.message ?? 'unknown'), stack: String((error as any)?.stack ?? '') });
       });
 
       setSocket(newSocket);
     } catch (error) {
       console.error('Error connecting to WebSocket:', error);
+      debug?.addEntry('err', 'connect_throw', { message: String((error as any)?.message ?? 'unknown') });
     }
   };
 
@@ -194,9 +209,15 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
 
   const sendMessage = (type: string, data: any) => {
     if (socket && isConnected) {
-      socket.emit(type, data);
+      try {
+        socket.emit(type, data);
+        debug?.addEntry('out', type ?? 'emit', data);
+      } catch (e) {
+        debug?.addEntry('err', 'emit_error', { type, message: String((e as any)?.message ?? 'unknown') });
+      }
     } else {
       console.error('Cannot send message: Socket.IO not connected');
+      debug?.addEntry('err', 'emit_blocked', { type, reason: 'not_connected' });
     }
   };
 
@@ -214,6 +235,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     if (!isConnected) {
       const reconnectTimer = setTimeout(() => {
         console.log('Attempting to reconnect...');
+        debug?.addEntry('sys', 'reconnect_attempt');
         connect();
       }, 5000);
 

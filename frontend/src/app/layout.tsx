@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { WebSocketProvider } from "../contexts/WebSocketContext";
-import WalletProvider from "../contexts/WalletProvider";
+import AppProviders from "@/components/AppProviders";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,19 +33,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <WebSocketProvider>
-          <WalletProvider
-            customAuthOptions={{
-              network: 'mainnet',
-              appDetails: {
-                name: 'ACORN Auction',
-                icon: '/acorn.png',
-              },
-            }}
-          >
-            {children}
-          </WalletProvider>
-        </WebSocketProvider>
+        <AppProviders>
+          {children}
+        </AppProviders>
       </body>
     </html>
   );

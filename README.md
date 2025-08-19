@@ -5,6 +5,11 @@
 # ACORN Auction Platform
 
 ## Recent Updates
+- **WebSocket Debug Window (Dev-only)**
+  - Floating Tailwind panel showing inbound/outbound WS events
+  - Copy-all and clear actions for quick debugging
+  - Enabled automatically when `NEXT_PUBLIC_APP_ENV!=production`
+  - Files: `frontend/src/contexts/DebugLogContext.tsx`, `frontend/src/components/DebugWindow.tsx`, `frontend/src/components/AppProviders.tsx`
 - **Homepage Visual Refresh**
   - Richer multi-layer gradients and overlays for depth
   - Proper banner image usage with controlled opacity and blend overlay
@@ -166,12 +171,17 @@ acornAuction/
    ```
    NEXT_PUBLIC_API_URL=http://localhost:5000
    NEXT_PUBLIC_WS_URL=ws://localhost:5000
+   NEXT_PUBLIC_APP_ENV=development
    ```
 
 5. Start the development server:
    ```bash
    yarn dev
    ```
+
+## WebSocket Debug Window
+
+To enable the WebSocket Debug Window, set `NEXT_PUBLIC_APP_ENV` to `development` in your `.env.local` file. This will automatically enable the debug window. The debug window will appear as a floating panel on the right side of the screen, showing inbound and outbound WebSocket events. You can copy all logs or clear them for quick debugging.
 
 ## Auction Mechanics
 
