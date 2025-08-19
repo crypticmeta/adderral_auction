@@ -30,6 +30,10 @@ export interface AuctionState {
         minutes: number;
         seconds: number;
     };
+    // Synchronized timing fields from server (ms since epoch)
+    // Used by countdown-timer to tick consistently across clients
+    endTimeMs?: number;
+    serverTimeMs?: number;
     recentActivity: AuctionActivity[];
 }
 

@@ -5,6 +5,10 @@
 # ACORN Auction Platform
 
 ## Recent Updates
+- **Synchronized Countdown + Richer WS Payload**
+  - Backend `auction_status` now includes: `totalTokens`, `ceilingMarketCap`, `currentMarketCap`, `refundedBTC`, `minPledge`, `maxPledge`, `startTime`, `endTime`, `serverTime`, and `ceilingReached`.
+  - Frontend countdown now ticks locally but is synchronized using `endTimeMs` and `serverTimeMs` for consistency across all clients.
+  - UI totals read from server (no longer default to 0 when present).
 - **WebSocket Debug Window (Dev-only)**
   - Floating Tailwind panel showing inbound/outbound WS events
   - Copy-all and clear actions for quick debugging

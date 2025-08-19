@@ -189,17 +189,31 @@ export const sendAuctionStatus = async (socket: any) => {
       auction.isCompleted = true;
     }
 
-    // Calculate current token price based on ceiling market cap and BTC price
-    // Default to 60000 if price service fails
+    // Calculate current token price based on BTC price and pledged BTC
+    // Default BTC price to 60000 if price service fails
     const btcPrice = await bitcoinPriceService.getBitcoinPrice().catch(() => 60000);
-    const currentPrice = auction.totalBTCPledged * btcPrice / auction.totalTokens;
+    const currentMarketCap = auction.totalBTCPledged * btcPrice;
+    const currentPrice = auction.totalTokens > 0 ? currentMarketCap / auction.totalTokens : 0;
+    const ceilingReached = typeof auction.ceilingMarketCap === 'number'
+      ? currentMarketCap >= auction.ceilingMarketCap
+      : false;
 
-    // Send auction status to client
+    // Send auction status to client (include key config + timing fields)
     socket.emit('auction_status', {
       isActive: auction.isActive,
       isCompleted: auction.isCompleted,
       totalBTCPledged: auction.totalBTCPledged,
-      remainingTime,
+      refundedBTC: auction.refundedBTC ?? 0,
+      remainingTime, // ms
+      serverTime: now.getTime(), // ms
+      startTime: auction.startTime,
+      endTime: auction.endTime,
+      totalTokens: auction.totalTokens,
+      ceilingMarketCap: auction.ceilingMarketCap,
+      currentMarketCap,
+      minPledge: auction.minPledge,
+      maxPledge: auction.maxPledge,
+      ceilingReached,
       currentPrice,
       pledges: auction.pledges.map(pledge => ({
         id: pledge.id,

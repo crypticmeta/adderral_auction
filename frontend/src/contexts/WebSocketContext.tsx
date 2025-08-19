@@ -53,16 +53,25 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const transformToAuctionState = (data: any | null): AuctionState | null => {
     if (!data) return null;
 
-    const totalTokensNum: number = typeof data.totalTokens === 'number' ? data.totalTokens : parseInt(String(data.totalTokens || 0), 10) || 0;
-    const ceilingMarketCapNum: number = typeof data.ceilingMarketCap === 'number' ? data.ceilingMarketCap : parseFloat(String(data.ceilingMarketCap || 0)) || 0;
+    const totalTokensNum: number = typeof data.totalTokens === 'number' ? data.totalTokens : parseInt(String(data.totalTokens ?? 0), 10) || 0;
+    const ceilingMarketCapNum: number = typeof data.ceilingMarketCap === 'number' ? data.ceilingMarketCap : parseFloat(String(data.ceilingMarketCap ?? 0)) || 0;
     const currentMarketCapNum: number = typeof data.currentMarketCap === 'number' ? data.currentMarketCap : 0;
     const refundedBTCNum: number = typeof data.refundedBTC === 'number' ? data.refundedBTC : 0;
     const totalRaisedBTC: number = typeof data.totalBTCPledged === 'number' ? data.totalBTCPledged : 0;
     const currentPrice: number = typeof data.currentPrice === 'number' ? data.currentPrice : 0;
-    const remainingTimeRaw: number = typeof data.remainingTime === 'number' ? data.remainingTime : 0;
 
-    const isLikelyMs = remainingTimeRaw > 24 * 60 * 60;
-    const remainingMs = isLikelyMs ? remainingTimeRaw : remainingTimeRaw * 1000;
+    // Prefer precise timing via endTime - serverTime for consistency across clients
+    const endTimeMs: number | null = data.endTime ? new Date(data.endTime).getTime() : null;
+    const serverTimeMs: number | null = typeof data.serverTime === 'number' ? data.serverTime : null;
+    let remainingMs = 0;
+    if (endTimeMs && serverTimeMs) {
+      remainingMs = Math.max(0, endTimeMs - serverTimeMs);
+    } else if (typeof data.remainingTime === 'number') {
+      const isLikelyMs = data.remainingTime > 24 * 60 * 60; // if > 1 day assume ms
+      remainingMs = isLikelyMs ? data.remainingTime : data.remainingTime * 1000;
+    } else {
+      remainingMs = 0;
+    }
     const hours = Math.max(0, Math.floor(remainingMs / (1000 * 60 * 60)));
     const minutes = Math.max(0, Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60)));
     const seconds = Math.max(0, Math.floor((remainingMs % (1000 * 60)) / 1000));
@@ -99,6 +108,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       progressPercentage: progress,
       currentPrice,
       timeRemaining: { hours, minutes, seconds },
+      endTimeMs: endTimeMs ?? undefined,
+      serverTimeMs: serverTimeMs ?? undefined,
       recentActivity,
     };
 

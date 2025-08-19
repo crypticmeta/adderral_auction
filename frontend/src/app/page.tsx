@@ -108,7 +108,7 @@ export default function Home() {
     );
   }
 
-  const { config, totalRaised, refundedBTC, currentMarketCap, ceilingMarketCap, ceilingReached, progressPercentage, currentPrice, timeRemaining, recentActivity } = auctionState;
+  const { config, totalRaised, refundedBTC, currentMarketCap, ceilingMarketCap, ceilingReached, progressPercentage, currentPrice, timeRemaining, endTimeMs, serverTimeMs, recentActivity } = auctionState;
 
   // Null-safe derived values
   const totalTokensM = config?.totalTokens ? parseInt(config.totalTokens) / 1_000_000 : 0;
@@ -207,6 +207,8 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <AuctionProgress
               timeRemaining={timeRemaining}
+              endTimeMs={endTimeMs}
+              serverTimeMs={serverTimeMs}
               totalRaised={totalRaised}
               refundedBTC={refundedBTC}
               currentMarketCap={currentMarketCap}
