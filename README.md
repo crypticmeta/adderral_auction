@@ -9,6 +9,10 @@
   - Backend `auction_status` now includes: `totalTokens`, `ceilingMarketCap`, `currentMarketCap`, `refundedBTC`, `minPledge`, `maxPledge`, `startTime`, `endTime`, `serverTime`, and `ceilingReached`.
   - Frontend countdown now ticks locally but is synchronized using `endTimeMs` and `serverTimeMs` for consistency across all clients.
   - UI totals read from server (no longer default to 0 when present).
+- **Safety: Removed BTC Price Fallback**
+  - Removed unsafe `$60,000` BTC fallback in backend price service.
+  - When price cannot be fetched, backend marks `priceError: true` in `auction_status` and sets `currentPrice`-dependent values conservatively.
+  - Frontend disables pledge UI and shows a banner until price recovers.
 - **WebSocket Debug Window (Dev-only)**
   - Floating Tailwind panel showing inbound/outbound WS events
   - Copy-all and clear actions for quick debugging

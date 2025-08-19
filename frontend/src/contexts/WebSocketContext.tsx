@@ -59,6 +59,11 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     const refundedBTCNum: number = typeof data.refundedBTC === 'number' ? data.refundedBTC : 0;
     const totalRaisedBTC: number = typeof data.totalBTCPledged === 'number' ? data.totalBTCPledged : 0;
     const currentPrice: number = typeof data.currentPrice === 'number' ? data.currentPrice : 0;
+    const priceError: boolean = Boolean(data.priceError ?? false);
+    const isActive: boolean | undefined = typeof data.isActive === 'boolean' ? data.isActive : undefined;
+    const isCompleted: boolean | undefined = typeof data.isCompleted === 'boolean' ? data.isCompleted : undefined;
+    const minPledgeNum: number | undefined = typeof data.minPledge === 'number' ? data.minPledge : undefined;
+    const maxPledgeNum: number | undefined = typeof data.maxPledge === 'number' ? data.maxPledge : undefined;
 
     // Prefer precise timing via endTime - serverTime for consistency across clients
     const endTimeMs: number | null = data.endTime ? new Date(data.endTime).getTime() : null;
@@ -107,6 +112,11 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       ceilingReached: Boolean(data.ceilingReached ?? false),
       progressPercentage: progress,
       currentPrice,
+      priceError,
+      isActive,
+      isCompleted,
+      minPledge: minPledgeNum,
+      maxPledge: maxPledgeNum,
       timeRemaining: { hours, minutes, seconds },
       endTimeMs: endTimeMs ?? undefined,
       serverTimeMs: serverTimeMs ?? undefined,

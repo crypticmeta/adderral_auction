@@ -25,6 +25,13 @@ export interface AuctionState {
     ceilingReached: boolean;
     progressPercentage: number;
     currentPrice: number;
+    // If true, backend couldn't fetch BTC price; disable pledge UI
+    priceError?: boolean;
+    // Optional raw controls from server for convenience/null-safe checks
+    isActive?: boolean;
+    isCompleted?: boolean;
+    minPledge?: number;
+    maxPledge?: number;
     timeRemaining: {
         hours: number;
         minutes: number;
