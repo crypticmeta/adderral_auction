@@ -31,6 +31,7 @@
   - Removed unsafe `$60,000` BTC fallback in backend price service.
   - When price cannot be fetched, backend marks `priceError: true` in `auction_status` and sets `currentPrice`-dependent values conservatively.
   - Frontend disables pledge UI and shows a banner until price recovers.
+  - Automated Jest tests added for caching/TTL, scheduler cadence, and WS `priceError` emission.
 - **WebSocket Debug Window (Dev-only)**
   - Floating Tailwind panel showing inbound/outbound WS events
   - Copy-all and clear actions for quick debugging
@@ -176,6 +177,13 @@ acornAuction/
    yarn dev
    ```
 
+6. Run backend tests (Jest + ts-jest):
+   ```bash
+   yarn test
+   # or with coverage
+   yarn test:coverage
+   ```
+
 ### Frontend Setup
 
 1. Navigate to the frontend directory:
@@ -268,6 +276,15 @@ Refund mechanism:
 - Node + TypeScript + Express
 - Prisma + Postgres
 - Redis (queue + Socket.IO adapter)
+ - Jest + ts-jest for automated tests (Bitcoin Price Service, scheduler, WS emissions)
+
+## Testing
+
+- Backend tests live under `backend/src/tests/`:
+  - `bitcoinPriceService.test.ts`: validates median calc, 30m cache, 3d long-cache fallback, and failure handling.
+  - `scheduledTasks.test.ts`: verifies 15m refresh cadence and warm TTL skip logic.
+  - `socketHandler.price.test.ts`: asserts `auction_status` payload sets `priceError` correctly and computes `currentMarketCap`/`currentPrice` from BTC price.
+- Run with `yarn test` from `backend/`.
 
 ## Notes
 
