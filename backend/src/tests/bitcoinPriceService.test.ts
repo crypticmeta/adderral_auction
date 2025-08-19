@@ -1,36 +1,9 @@
 // File: backend/src/tests/bitcoinPriceService.test.ts | Purpose: Unit tests for BitcoinPriceService caching and failure paths
 import axios from 'axios';
+import { redisClient } from '../config/redis';
 import { bitcoinPriceService, BitcoinPriceService } from '../services/bitcoinPriceService';
 
-// Mock Redis client used by the service
-jest.mock('../config/redis', () => {
-  const store: Record<string, { value: string; ex?: number }> = {};
-  return {
-    __esModule: true,
-    redisClient: {
-      get: jest.fn(async (k: string) => store[k]?.value ?? null),
-      set: jest.fn(async (k: string, v: string, exFlag?: string, ex?: number) => {
-        store[k] = { value: v, ex: exFlag === 'EX' ? ex : undefined };
-        return 'OK';
-      }),
-      ttl: jest.fn(async (k: string) => {
-        const ex = store[k]?.ex;
-        return typeof ex === 'number' ? ex : -2; // -2 when not exists, -1 when no expiry
-      }),
-      del: jest.fn(async (...keys: string[]) => {
-        let c = 0;
-        for (const k of keys) {
-          if (store[k]) { delete store[k]; c++; }
-        }
-        return c;
-      }),
-      keys: jest.fn(async (pattern: string) => Object.keys(store).filter(k => k.includes(pattern.replace('*','')))),
-    },
-    default: {}
-  };
-});
-
-// Mock axios
+// Mock axios only (external HTTP)
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
@@ -61,13 +34,17 @@ describe('BitcoinPriceService', () => {
 
     // Assert
     expect(price).toBe(60000);
-
-    const { redisClient } = jest.requireMock('../config/redis');
-    expect(redisClient.set).toHaveBeenCalledWith('btc:price:usd', '60000', 'EX', 1800);
-    expect(redisClient.set).toHaveBeenCalledWith('btc:price:usd:long', '60000', 'EX', 259200);
+    const cached = await redisClient.get('btc:price:usd');
+    const cachedLong = await redisClient.get('btc:price:usd:long');
+    expect(cached).toBe('60000');
+    expect(cachedLong).toBe('60000');
+    const ttlShort = await redisClient.ttl('btc:price:usd');
+    const ttlLong = await redisClient.ttl('btc:price:usd:long');
+    expect(ttlShort).toBeGreaterThan(0);
+    expect(ttlShort).toBeLessThanOrEqual(1800);
+    expect(ttlLong).toBeGreaterThan(24 * 60 * 60); // > 1 day
 
     // Subsequent get should come from cache without axios calls
-    (redisClient.get as jest.Mock).mockResolvedValueOnce('60000');
     mockedAxios.get.mockClear();
     const price2 = await SERVICE.getBitcoinPrice();
     expect(price2).toBe(60000);
@@ -75,13 +52,9 @@ describe('BitcoinPriceService', () => {
   });
 
   test('long-cache fallback used when fresh fetch fails', async () => {
-    const { redisClient } = jest.requireMock('../config/redis');
-    // No short cache
-    (redisClient.get as jest.Mock).mockImplementation(async (k: string) => {
-      if (k === 'btc:price:usd') return null;
-      if (k === 'btc:price:usd:long') return '55555';
-      return null;
-    });
+    // Seed long cache only
+    await redisClient.del('btc:price:usd');
+    await redisClient.set('btc:price:usd:long', '55555', 'EX', 60 * 60);
     // All axios calls fail
     mockedAxios.get.mockRejectedValue(new Error('network error'));
 
@@ -90,8 +63,8 @@ describe('BitcoinPriceService', () => {
   });
 
   test('throws when no cache and all sources fail', async () => {
-    const { redisClient } = jest.requireMock('../config/redis');
-    (redisClient.get as jest.Mock).mockResolvedValue(null);
+    await redisClient.del('btc:price:usd');
+    await redisClient.del('btc:price:usd:long');
     mockedAxios.get.mockRejectedValue(new Error('down'));
     await expect(SERVICE.getBitcoinPrice()).rejects.toThrow('Unable to obtain valid BTC price');
   });

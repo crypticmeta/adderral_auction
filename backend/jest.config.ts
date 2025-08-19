@@ -11,6 +11,10 @@ const config: Config = {
   verbose: false,
   // Resolve TS paths simply within backend/src
   moduleDirectories: ['node_modules', '<rootDir>/src'],
+  // Use real Postgres and Redis via Testcontainers
+  globalSetup: '<rootDir>/src/tests/setup/testcontainers.setup.ts',
+  globalTeardown: '<rootDir>/src/tests/setup/testcontainers.teardown.ts',
+  setupFilesAfterEnv: ['<rootDir>/src/tests/setup/jest.setup.ts'],
 };
 
 export default config;

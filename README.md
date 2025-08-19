@@ -284,7 +284,18 @@ Refund mechanism:
   - `bitcoinPriceService.test.ts`: validates median calc, 30m cache, 3d long-cache fallback, and failure handling.
   - `scheduledTasks.test.ts`: verifies 15m refresh cadence and warm TTL skip logic.
   - `socketHandler.price.test.ts`: asserts `auction_status` payload sets `priceError` correctly and computes `currentMarketCap`/`currentPrice` from BTC price.
-- Run with `yarn test` from `backend/`.
+- Tests now run against real Postgres and Redis using Testcontainers. Ensure Docker is running.
+- Install backend deps and run with `yarn test` from `backend/`.
+
+### Real DB/Redis (Testcontainers)
+
+- Prereq: Docker daemon running and network access to pull images `postgres:16` and `redis:7-alpine`.
+- Jest global setup (`backend/src/tests/setup/testcontainers.setup.ts`) will:
+  - Start ephemeral Postgres and Redis containers
+  - Set `DATABASE_URL`, `REDIS_*` env vars
+  - Run `prisma generate` and `prisma migrate deploy`
+  - Tests clean Redis keys and truncate tables between cases
+ - Teardown stops containers automatically.
 
 ## Notes
 

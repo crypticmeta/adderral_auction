@@ -1,21 +1,7 @@
 // File: backend/src/tests/socketHandler.price.test.ts | Purpose: Verify sendAuctionStatus emits priceError and computed fields correctly
+import { PrismaClient } from '../generated/prisma';
 
-// Mock PrismaClient used inside socketHandler
-jest.mock('../generated/prisma', () => {
-  const auction = {
-    findFirst: jest.fn(),
-    update: jest.fn(),
-  };
-  const PrismaClient = jest.fn(() => ({
-    auction,
-    pledge: {} as any,
-    refundedPledge: {} as any,
-    user: {} as any,
-  }));
-  return { PrismaClient, __mocks: { auction } };
-});
-
-// Mock bitcoin price service
+// Mock bitcoin price service only
 jest.mock('../services/bitcoinPriceService', () => ({
   __esModule: true,
   bitcoinPriceService: {
@@ -41,20 +27,21 @@ describe('sendAuctionStatus', () => {
     const { bitcoinPriceService } = jest.requireMock('../services/bitcoinPriceService');
     ;(bitcoinPriceService.getBitcoinPrice as jest.Mock).mockResolvedValue(60000);
 
-    const { __mocks }: any = jest.requireMock('../generated/prisma');
-    __mocks.auction.findFirst.mockResolvedValue({
-      id: 'auc1',
-      isActive: true,
-      isCompleted: false,
-      endTime: new Date(Date.now() + 60_000),
-      startTime: new Date(Date.now() - 1000),
-      totalBTCPledged: 1.23,
-      refundedBTC: 0,
-      totalTokens: 100_000_000,
-      ceilingMarketCap: 15_000_000,
-      minPledge: 0.001,
-      maxPledge: 0.5,
-      pledges: [],
+    // Seed DB
+    const prisma = new PrismaClient();
+    const auc = await prisma.auction.create({
+      data: {
+        isActive: true,
+        isCompleted: false,
+        endTime: new Date(Date.now() + 60_000),
+        startTime: new Date(Date.now() - 1000),
+        totalBTCPledged: 1.23,
+        refundedBTC: 0,
+        totalTokens: 100_000_000,
+        ceilingMarketCap: 15_000_000,
+        minPledge: 0.001,
+        maxPledge: 0.5,
+      }
     });
 
     let sendAuctionStatus: any;
@@ -70,7 +57,7 @@ describe('sendAuctionStatus', () => {
     const evt = (socket.emitted as EmittedEvent[]).find((ev: EmittedEvent) => ev.event === 'auction_status');
     expect(evt).toBeTruthy();
     const p = (evt as EmittedEvent).payload;
-    expect(p.id).toBe('auc1');
+    expect(p.id).toBe(auc.id);
     expect(p.priceError).toBe(false);
     expect(p.currentMarketCap).toBeCloseTo(1.23 * 60000, 5);
     expect(p.currentPrice).toBeCloseTo((1.23 * 60000) / 100_000_000, 10);
@@ -91,20 +78,21 @@ describe('sendAuctionStatus', () => {
     const { bitcoinPriceService } = jest.requireMock('../services/bitcoinPriceService');
     ;(bitcoinPriceService.getBitcoinPrice as jest.Mock).mockRejectedValue(new Error('fail'));
 
-    const { __mocks }: any = jest.requireMock('../generated/prisma');
-    __mocks.auction.findFirst.mockResolvedValue({
-      id: 'auc2',
-      isActive: true,
-      isCompleted: false,
-      endTime: new Date(Date.now() + 60_000),
-      startTime: new Date(Date.now() - 1000),
-      totalBTCPledged: 2,
-      refundedBTC: 0,
-      totalTokens: 50_000,
-      ceilingMarketCap: 15_000_000,
-      minPledge: 0.001,
-      maxPledge: 0.5,
-      pledges: [],
+    // Seed DB
+    const prisma = new PrismaClient();
+    const auc = await prisma.auction.create({
+      data: {
+        isActive: true,
+        isCompleted: false,
+        endTime: new Date(Date.now() + 60_000),
+        startTime: new Date(Date.now() - 1000),
+        totalBTCPledged: 2,
+        refundedBTC: 0,
+        totalTokens: 50_000,
+        ceilingMarketCap: 15_000_000,
+        minPledge: 0.001,
+        maxPledge: 0.5,
+      }
     });
 
     let sendAuctionStatus: any;
@@ -123,7 +111,7 @@ describe('sendAuctionStatus', () => {
     expect(p.currentMarketCap).toBe(0);
     expect(p.currentPrice).toBe(0);
     // Still includes base fields
-    expect(p.id).toBe('auc2');
+    expect(p.id).toBe(auc.id);
     expect(p.totalTokens).toBe(50_000);
     expect(p.ceilingMarketCap).toBe(15_000_000);
     expect(typeof p.minPledge).toBe('number');
