@@ -14,6 +14,9 @@
   - New highlighted stat card in `AuctionStats` showing total BTC raised with a percentage-of-ceiling badge
   - Prop: `totalRaisedBTC` added to `AuctionStats` and wired from `page.tsx`
   - Files: `frontend/src/components/auction-stats.tsx`, `frontend/src/app/page.tsx`
+- **Footer UI Polish**
+  - Glass-card footer with rounded top, blur, and clearer border for readability
+  - File: `frontend/src/app/page.tsx`
 - **Synchronized Countdown + Richer WS Payload**
   - Backend `auction_status` now includes: `totalTokens`, `ceilingMarketCap`, `currentMarketCap`, `refundedBTC`, `minPledge`, `maxPledge`, `startTime`, `endTime`, `serverTime`, and `ceilingReached`.
   - Frontend countdown now ticks locally but is synchronized using `endTimeMs` and `serverTimeMs` for consistency across all clients.

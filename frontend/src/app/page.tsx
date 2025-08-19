@@ -269,25 +269,30 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-gray-800 py-8">
-        <div className="max-w-6xl mx-auto px-6 text-center">
-          <div className="flex items-center justify-center space-x-4 mb-4">
-            <div className="w-8 h-8 bg-gradient-to-r from-acorn-500 to-acorn-600 rounded-full p-1.5">
-              <img src="/acorn.png" alt="ACORN" className="w-full h-full object-contain" />
-            </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-acorn-400 to-acorn-600 bg-clip-text text-transparent">
-              ACORN by Adderrels
-            </span>
-          </div>
-          <p className="text-gray-400 text-sm">
-            © 2024 Adderrels. All rights reserved. Participate responsibly in cryptocurrency auctions.
-          </p>
+      <footer className="relative z-20 mt-12">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="glass-card bg-dark-900/70 backdrop-blur border border-white/10 rounded-t-2xl px-6 py-6">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-9 h-9 bg-gradient-to-r from-acorn-500 to-acorn-600 rounded-full p-1.5 overflow-hidden">
+                  <img src="/acorn.png" alt="ACORN" className="w-full h-full object-contain" />
+                </div>
+                <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-acorn-400 to-acorn-600 bg-clip-text text-transparent">
+                  ACORN by Adderrels
+                </span>
+              </div>
 
-          {resetMessage && (
-            <p className={`mt-2 text-sm ${resetMessage.includes('success') ? 'text-green-500' : 'text-red-500'}`}>
-              {resetMessage}
-            </p>
-          )}
+              <p className="text-gray-400 text-xs sm:text-sm text-center sm:text-right">
+                © 2025 Adderrels. All rights reserved. Participate responsibly in cryptocurrency auctions.
+              </p>
+            </div>
+
+            {resetMessage && (
+              <p className={`mt-3 text-sm text-center ${resetMessage.includes('success') ? 'text-green-500' : 'text-red-500'}`}>
+                {resetMessage}
+              </p>
+            )}
+          </div>
         </div>
       </footer>
     </div>
