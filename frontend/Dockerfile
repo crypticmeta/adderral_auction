@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.6
 # Purpose: Production multi-stage image for Next.js frontend. Builds with Yarn and serves via Next.js in a minimal Node image.
 # Notes: Uses Next.js build output and runs `next start`. Set NEXT_PUBLIC_* envs at runtime.
 
@@ -11,8 +12,17 @@ RUN apk add --no-cache libc6-compat
 # Copy manifests first for better caching (context is frontend/)
 COPY package.json yarn.lock ./
 
-# Install deps (frozen lockfile for reproducibility)
-RUN yarn install --frozen-lockfile
+# Increase Yarn network timeout and enable cache to reduce registry pressure
+ARG YARN_NETWORK_TIMEOUT=600000
+ENV YARN_CACHE_FOLDER=/usr/local/share/.cache/yarn
+RUN yarn config set registry https://registry.yarnpkg.com \
+  && yarn config set network-timeout ${YARN_NETWORK_TIMEOUT} \
+  && yarn config set prefer-offline true
+
+# Install deps (frozen lockfile) with BuildKit cache mounts and higher timeout
+RUN --mount=type=cache,target=/usr/local/share/.cache/yarn \
+    --mount=type=cache,target=/root/.cache \
+    yarn install --frozen-lockfile --network-timeout ${YARN_NETWORK_TIMEOUT}
 
 # Copy source
 COPY . .
