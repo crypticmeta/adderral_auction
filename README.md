@@ -339,6 +339,7 @@ Refund mechanism:
   - `.github/workflows/build-push-backend.yml` builds `backend/` and pushes:
     - `ghcr.io/<owner>/backend:latest`, `<short-sha>`, `<semver>` on `vX.Y.Z` tags
 - Images are multi-arch (amd64/arm64). Built via Yarn. Uses Docker Buildx cache.
+- Frontend Dockerfile isolates Yarn cache per-arch and locks cache mounts to avoid cross-arch cache corruption when resolving platform-specific Next.js SWC binaries during multi-arch builds.
 - Pull:
   ```bash
   docker pull ghcr.io/<owner>/frontend:latest

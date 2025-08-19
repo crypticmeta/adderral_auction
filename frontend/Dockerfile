@@ -5,6 +5,9 @@
 # --- Build stage ---
 FROM node:20-alpine AS builder
 WORKDIR /app
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
 
 # Install OS deps if needed (optional)
 RUN apk add --no-cache libc6-compat
@@ -14,14 +17,15 @@ COPY package.json yarn.lock ./
 
 # Increase Yarn network timeout and enable cache to reduce registry pressure
 ARG YARN_NETWORK_TIMEOUT=600000
-ENV YARN_CACHE_FOLDER=/usr/local/share/.cache/yarn
+ENV YARN_CACHE_FOLDER=/usr/local/share/.cache/yarn/${TARGETARCH}
 RUN yarn config set registry https://registry.yarnpkg.com \
   && yarn config set network-timeout ${YARN_NETWORK_TIMEOUT} \
   && yarn config set prefer-offline true
 
 # Install deps (frozen lockfile) with BuildKit cache mounts and higher timeout
-RUN --mount=type=cache,target=/usr/local/share/.cache/yarn \
-    --mount=type=cache,target=/root/.cache \
+# Note: cache is isolated per-arch and locked to avoid cross-arch tar extraction races
+RUN --mount=type=cache,target=/usr/local/share/.cache/yarn/${TARGETARCH},id=yarn-cache-${TARGETARCH},sharing=locked \
+    --mount=type=cache,target=/root/.cache/${TARGETARCH},id=root-cache-${TARGETARCH},sharing=locked \
     yarn install --frozen-lockfile --network-timeout ${YARN_NETWORK_TIMEOUT}
 
 # Copy source
