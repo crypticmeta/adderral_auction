@@ -201,6 +201,7 @@ export default function Home() {
             ceilingMarketCap="15"
             currentMarketCap={currentMarketCapM.toFixed(2)}
             duration="72"
+            totalRaisedBTC={typeof totalRaised === 'number' ? totalRaised : 0}
           />
 
           {/* Main Auction Interface */}

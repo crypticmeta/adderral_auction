@@ -1,4 +1,5 @@
-// Auction progress component showing time remaining and progress bar
+// Auction progress component showing time remaining and an animated, shimmering progress bar that reacts to live pledges
+import React, { useEffect, useRef, useState } from 'react';
 import { CountdownTimer } from './countdown-timer';
 
 interface TimeRemaining {
@@ -42,6 +43,22 @@ export function AuctionProgress({
   const hasHardCap = typeof hardCap === 'number' && !Number.isNaN(hardCap);
   const hasCapsUSD = typeof ceilingMarketCap === 'number' && !Number.isNaN(ceilingMarketCap);
 
+  // Animate on progress increase (live pledges)
+  const [bump, setBump] = useState(false);
+  const prevPctRef = useRef<number>(0);
+  const clampedPct = Math.max(0, Math.min(100, progressPercentage ?? 0));
+
+  useEffect(() => {
+    const prev = prevPctRef.current;
+    if (clampedPct > prev + 0.05) {
+      setBump(true);
+      const t = setTimeout(() => setBump(false), 450);
+      return () => clearTimeout(t);
+    }
+    // Always update
+    prevPctRef.current = clampedPct;
+  }, [clampedPct]);
+
   return (
     <div className="glass-card p-8 rounded-3xl">
       <div className="flex items-center justify-between mb-6">
@@ -83,14 +100,39 @@ export function AuctionProgress({
           )}
         </div>
 
-        <div className="w-full bg-dark-800 rounded-full h-4 overflow-hidden">
-          <div
-            className={`h-full bg-gradient-to-r ${
-              ceilingReached ? 'from-amber-500 to-amber-600' : 'from-acorn-500 to-acorn-600'
-            } progress-glow transition-all duration-500 ease-out`}
-            style={{ width: `${Math.max(0, Math.min(100, progressPercentage ?? 0))}%` }}
-            data-testid="progress-bar"
+        <div
+          className="relative w-full h-4 rounded-full overflow-hidden bg-dark-800/80 border border-white/5"
+          aria-label="Auction progress"
+          role="progressbar"
+          aria-valuenow={Number.isFinite(clampedPct) ? Number(clampedPct.toFixed(1)) : 0}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          {/* Rail subtle gradient for depth */}
+          <div className="absolute inset-0 opacity-60 pointer-events-none"
+               aria-hidden="true"
+               style={{
+                 background:
+                   'linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02) 20%, rgba(255,255,255,0.06) 40%)',
+               }}
           />
+
+          {/* Fill with animated gradient */}
+          <div
+            className={`relative h-full transition-[width] duration-500 ease-out ${bump ? 'animate-bump' : ''}`}
+            style={{ width: `${clampedPct}%` }}
+            data-testid="progress-bar"
+          >
+            <div
+              className={`absolute inset-0 ${
+                ceilingReached
+                  ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600'
+                  : 'bg-gradient-to-r from-acorn-500 via-acorn-400 to-acorn-600'
+              } gradient-animate progress-glow`}
+            />
+            {/* Shimmer overlay (only over filled portion) */}
+            <div className="absolute inset-0 progress-shimmer" aria-hidden="true" />
+          </div>
         </div>
 
         <div className="flex justify-between text-xs text-gray-500 mt-2">

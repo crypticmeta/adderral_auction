@@ -157,3 +157,47 @@ body {
   opacity: 0.4;
 }
 
+
+/* Animated gradient for progress fill */
+@keyframes gradient-move {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.gradient-animate {
+  background-size: 200% 200%;
+  animation: gradient-move 6s ease-in-out infinite;
+}
+
+/* Shimmer overlay for progress */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.progress-shimmer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 40%;
+  background: linear-gradient(90deg, rgba(255,255,255,0.0) 0%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0.0) 100%);
+  filter: blur(4px);
+  animation: shimmer 2.2s linear infinite;
+  opacity: 0.6;
+}
+
+/* Subtle bump when progress increases */
+@keyframes bump {
+  0% { transform: scaleY(1); }
+  35% { transform: scaleY(1.15); }
+  100% { transform: scaleY(1); }
+}
+
+.animate-bump {
+  animation: bump 0.45s ease-out;
+  transform-origin: center;
+}
+

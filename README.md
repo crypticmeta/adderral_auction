@@ -5,6 +5,15 @@
 # ACORN Auction Platform
 
 ## Recent Updates
+- **Animated Auction Progress Bar (Live-reactive)**
+  - Lively gradient fill with shimmer and subtle bump on pledge-driven increases
+  - Reacts in real time to `auction_status` WebSocket updates
+  - Files: `frontend/src/components/auction-progress.tsx`, `frontend/src/app/globals.css`
+  - Accessible with `role="progressbar"` and ARIA values
+- **Raised So Far Highlight**
+  - New highlighted stat card in `AuctionStats` showing total BTC raised with a percentage-of-ceiling badge
+  - Prop: `totalRaisedBTC` added to `AuctionStats` and wired from `page.tsx`
+  - Files: `frontend/src/components/auction-stats.tsx`, `frontend/src/app/page.tsx`
 - **Synchronized Countdown + Richer WS Payload**
   - Backend `auction_status` now includes: `totalTokens`, `ceilingMarketCap`, `currentMarketCap`, `refundedBTC`, `minPledge`, `maxPledge`, `startTime`, `endTime`, `serverTime`, and `ceilingReached`.
   - Frontend countdown now ticks locally but is synchronized using `endTimeMs` and `serverTimeMs` for consistency across all clients.
