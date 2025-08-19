@@ -1,0 +1,157 @@
+/* File: globals.css - Global styles, theme variables, and custom utilities (gradients, glass, animations) */
+@config "../../tailwind.config.ts";
+@import "tailwindcss";
+
+:root {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 240 5.9% 10%;
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --ring: 240 4.9% 83.9%;
+  
+  /* Custom color variables */
+  --color-primary: #f97316;
+  --color-secondary: #ea580c;
+  --color-tertiary: #a855f7;
+  --color-quaternary: #22d3ee;
+  
+  /* Acorn theme colors */
+  --acorn-500: #f97316;
+  --acorn-600: #ea580c;
+  --acorn-400: #fb923c;
+  --dark-950: #0a0a0a;
+  --dark-900: #121212;
+  --dark-800: #1e1e1e;
+  --dark-700: #2d2d2d;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 20% -10%, rgba(168, 85, 247, 0.08), transparent 60%),
+    radial-gradient(1000px 500px at 80% 0%, rgba(34, 211, 238, 0.07), transparent 55%),
+    radial-gradient(ellipse at bottom, hsl(var(--background)) 0%, #0a0a0a 100%);
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans), sans-serif;
+}
+
+/* Glass card effect */
+.glass-card {
+  background: rgba(30, 30, 30, 0.4);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  border-color: rgba(249, 115, 22, 0.3);
+  box-shadow: 0 8px 32px rgba(249, 115, 22, 0.15);
+}
+
+/* Custom animations */
+@keyframes border-glow {
+  0%, 100% { border-color: hsl(var(--border)); }
+  50% { border-color: rgba(249, 115, 22, 0.5); }
+}
+
+@keyframes text-glow {
+  0%, 100% { text-shadow: 0 0 4px rgba(255, 255, 255, 0.1); }
+  50% { text-shadow: 0 0 12px rgba(249, 115, 22, 0.6); }
+}
+
+/* Custom utility classes */
+.animate-border-glow {
+  animation: border-glow 3s infinite linear;
+}
+
+.animate-text-glow {
+  animation: text-glow 3s infinite linear;
+}
+
+.bg-gradient-primary {
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+}
+
+.text-gradient {
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Acorn auction specific styles */
+.number-glow {
+  text-shadow: 0 0 10px rgba(249, 115, 22, 0.5);
+}
+
+.progress-glow {
+  box-shadow: 0 0 15px rgba(249, 115, 22, 0.5);
+}
+
+.animate-glow {
+  box-shadow: 0 0 15px rgba(249, 115, 22, 0.3);
+  transition: all 0.3s ease;
+}
+
+.animate-glow:hover {
+  box-shadow: 0 0 25px rgba(249, 115, 22, 0.5);
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.gradient-bg {
+  /* Deeper multi-color overlay to sit above the banner image */
+  background:
+    linear-gradient(to bottom right, rgba(10, 10, 10, 0.85), rgba(10, 10, 10, 0.92) 35%, rgba(10, 10, 10, 1) 70%),
+    radial-gradient(600px 300px at 15% 5%, rgba(249, 115, 22, 0.20), transparent 60%),
+    radial-gradient(700px 350px at 85% 10%, rgba(168, 85, 247, 0.18), transparent 65%);
+}
+
+/* Banner helpers */
+.banner-image {
+  background-position: center top;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.banner-overlay {
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+/* Section gradients */
+.section-gradient {
+  background:
+    radial-gradient(600px 300px at 10% 0%, rgba(168, 85, 247, 0.08), transparent 60%),
+    radial-gradient(600px 300px at 90% 0%, rgba(34, 211, 238, 0.06), transparent 60%);
+}
+
+/* Accent orb utility */
+.orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(40px);
+  opacity: 0.4;
+}
+

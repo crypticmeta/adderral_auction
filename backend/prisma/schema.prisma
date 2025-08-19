@@ -1,0 +1,79 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id
+  cardinal_address String?  // BTC address for payments (P2PKH/P2WPKH)
+  ordinal_address String?  // Taproot address for NFTs (P2TR)
+  cardinal_pubkey String?  // Public key for cardinal address
+  ordinal_pubkey  String?  // Public key for ordinal address
+  wallet         String?  // Wallet provider name (unisat, xverse, etc.)
+  signature      String?  // Signature from wallet authentication
+  message        String?  // Custom message that was signed
+  network        String?  // 'mainnet', 'testnet', or 'regtest'
+  connected      Boolean  @default(false) // Connection status
+  createdAt      DateTime @default(now())
+  pledges        Pledge[]
+  refundedPledges RefundedPledge[]
+}
+
+model Pledge {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  btcAmount      Float
+  depositAddress String
+  txid           String?
+  fee            Float?
+  confirmations  Int?     @default(0)
+  sender         String?
+  recipient      String?
+  status         String   @default("pending") // 'pending', 'confirmed', or 'failed'
+  signature      String?  // Signature to verify wallet ownership
+  timestamp      DateTime @default(now())
+  verified       Boolean  @default(false)
+  processed      Boolean  @default(false)
+  needsRefund    Boolean  @default(false)
+  auctionId      String
+  auction        Auction  @relation(fields: [auctionId], references: [id])
+}
+
+model Auction {
+  id              String          @id @default(uuid())
+  totalTokens     Float
+  ceilingMarketCap Float           // Ceiling market cap in USD
+  totalBTCPledged Float           @default(0)
+  refundedBTC     Float           @default(0)  // Track refunded BTC amounts
+  startTime       DateTime        @default(now())
+  endTime         DateTime
+  isActive        Boolean         @default(true)
+  isCompleted     Boolean         @default(false)
+  minPledge       Float
+  maxPledge       Float
+  pledges         Pledge[]
+  refundedPledges RefundedPledge[]
+}
+
+model RefundedPledge {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  btcAmount      Float
+  depositAddress String
+  txid           String?
+  timestamp      DateTime @default(now())
+  auctionId      String
+  auction        Auction  @relation(fields: [auctionId], references: [id])
+  refundTxid     String?  // Transaction ID for the refund
+  refunded       Boolean  @default(false) // Whether the refund has been processed
+}
