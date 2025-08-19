@@ -1,0 +1,10 @@
+# Purpose: Reduce Docker build context for frontend
+node_modules
+.next
+out
+.git
+.gitignore
+Dockerfile
+README.md
+**/*.log
+.env*

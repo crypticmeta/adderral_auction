@@ -276,6 +276,28 @@ Refund mechanism:
 - Redis is used for caching to improve performance and reduce external API calls
 - In a production environment, consider adding more error handling and fallback mechanisms
 
+## CI/CD: Container Images (GHCR)
+
+- Workflows:
+  - `.github/workflows/build-push-frontend.yml` builds `frontend/` and pushes:
+    - `ghcr.io/<owner>/frontend:latest`, `<short-sha>`, `<semver>` on `vX.Y.Z` tags
+  - `.github/workflows/build-push-backend.yml` builds `backend/` and pushes:
+    - `ghcr.io/<owner>/backend:latest`, `<short-sha>`, `<semver>` on `vX.Y.Z` tags
+- Images are multi-arch (amd64/arm64). Built via Yarn. Uses Docker Buildx cache.
+- Pull:
+  ```bash
+  docker pull ghcr.io/<owner>/frontend:latest
+  docker pull ghcr.io/<owner>/backend:latest
+  ```
+- Runtime envs:
+  - Frontend: provide `NEXT_PUBLIC_*` at run.
+  - Backend: `PORT` (default 5000), DB/Redis/JWT envs (see `.env.example`).
+
+### Deployment notes (quick)
+- Frontend: expose 3000 behind CDN/ALB; put CloudFront in front for cache/static.
+- Backend: expose 5000 behind ALB with WebSocket + sticky sessions; health checks + autoscale.
+- Run across multiple AZs for resilience.
+
 ## License
 
 MIT

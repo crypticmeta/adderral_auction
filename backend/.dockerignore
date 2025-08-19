@@ -1,0 +1,9 @@
+# Purpose: Reduce Docker build context for backend
+node_modules
+.git
+.gitignore
+Dockerfile
+README.md
+**/*.log
+.env*
+prisma/*.db
