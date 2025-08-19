@@ -84,7 +84,9 @@ Component: `frontend/src/components/PledgeForm.tsx`
 
 ## Dev-only Reset (if enabled in your env)
 - [ ] Reset endpoint available only in non-production
-- [ ] Triggering reset clears pledges, restarts 72-hour auction
+- [ ] Triggering reset truncates core tables (`User`, `Auction`, `Pledge`, `RefundedPledge`) and reseeds admin + test data
+- [ ] Redis auction caches (`auction:*`) are purged
+- [ ] New 72-hour auction is created and broadcast to clients
 - [ ] Frontend reset button visible in dev and functions without auth token
 - [ ] Page reloads after reset
 

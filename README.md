@@ -234,6 +234,7 @@ Refund mechanism:
 
 ### Auction
 - `GET /api/auction/status` - Get auction status (public)
+- `POST /api/auction/reset` - Dev-only full reset: truncates `User`, `Auction`, `Pledge`, `RefundedPledge`, reseeds admin + sample users + a fresh 72h auction, purges Redis `auction:*` caches, and broadcasts the new state
 
 ## WebSocket Messages
 
