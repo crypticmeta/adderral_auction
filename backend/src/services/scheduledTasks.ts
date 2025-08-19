@@ -10,6 +10,8 @@ import { redisClient } from '../config/redis';
 
 const prisma = new PrismaClient();
 
+let priceInterval: NodeJS.Timeout | null = null;
+
 // Check for expired auctions every minute
 export const startAuctionTimeCheck = () => {
   console.log('Starting scheduled auction time check service');
@@ -29,7 +31,23 @@ export const startBitcoinPriceRefresh = () => {
   maybeRefreshBitcoinPrice();
   
   // Then schedule to run every 15 minutes
-  setInterval(maybeRefreshBitcoinPrice, 15 * 60 * 1000);
+  if (priceInterval) {
+    // clear pre-existing interval to avoid leaks
+    clearInterval(priceInterval);
+    priceInterval = null;
+  }
+  priceInterval = setInterval(maybeRefreshBitcoinPrice, 15 * 60 * 1000);
+  if (priceInterval && typeof (priceInterval as any).unref === 'function') {
+    (priceInterval as any).unref();
+  }
+};
+
+// Stop the periodic Bitcoin price refresh interval (used by tests to avoid leaks)
+export const stopBitcoinPriceRefresh = () => {
+  if (priceInterval) {
+    clearInterval(priceInterval);
+    priceInterval = null;
+  }
 };
 
 // Check for auctions that have reached their 72-hour time limit

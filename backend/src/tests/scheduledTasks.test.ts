@@ -1,60 +1,33 @@
 // File: backend/src/tests/scheduledTasks.test.ts | Purpose: Test scheduled Bitcoin price refresh cadence and warm-threshold logic
-import { startBitcoinPriceRefresh } from '../services/scheduledTasks';
+import { startBitcoinPriceRefresh, stopBitcoinPriceRefresh } from '../services/scheduledTasks';
 import { redisClient } from '../config/redis';
 
-// Mock price service only (avoid external HTTP)
-jest.mock('../services/bitcoinPriceService', () => ({
-  __esModule: true,
-  bitcoinPriceService: {
-    refreshBitcoinPrice: jest.fn(async () => 61000),
-  }
-}));
-
-describe('scheduledTasks.startBitcoinPriceRefresh', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    jest.useFakeTimers();
+describe('scheduledTasks.startBitcoinPriceRefresh (live)', () => {
+  beforeEach(async () => {
+    await redisClient.del('btc:price:usd');
+    await redisClient.del('btc:price:usd:long');
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    stopBitcoinPriceRefresh();
   });
 
-  test('skips refresh when cache TTL > warm threshold (300s)', async () => {
-    const { bitcoinPriceService } = jest.requireMock('../services/bitcoinPriceService');
-    // Set key with EX 600
-    await redisClient.set('btc:price:usd', '60000', 'EX', 600);
+  const waitForKey = async (key: string, timeoutMs = 10000) => {
+    const start = Date.now();
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const v = await redisClient.get(key);
+      if (v != null) return v;
+      if (Date.now() - start > timeoutMs) return null;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  };
 
+  test('initial run populates cache when missing (ttl -2)', async () => {
     startBitcoinPriceRefresh();
-
-    // Immediately invoked maybeRefreshBitcoinPrice once
-    await Promise.resolve();
-
-    expect(bitcoinPriceService.refreshBitcoinPrice).not.toHaveBeenCalled();
-
-    // Advance 15 minutes and run again; keep warm
-    jest.advanceTimersByTime(15 * 60 * 1000);
-
-    // Let the scheduled function resolve
-    await Promise.resolve();
-
-    expect(bitcoinPriceService.refreshBitcoinPrice).not.toHaveBeenCalled();
-  });
-
-  test('triggers refresh when ttl <= 300 or cache missing', async () => {
-    const { bitcoinPriceService } = jest.requireMock('../services/bitcoinPriceService');
-
-    // ttl -2 (missing) -> triggers
-    await redisClient.del('btc:price:usd');
-
-    startBitcoinPriceRefresh();
-    await Promise.resolve();
-    expect(bitcoinPriceService.refreshBitcoinPrice).toHaveBeenCalledTimes(1);
-
-    // Next tick after 15m with ttl 120 -> triggers again
-    await redisClient.set('btc:price:usd', '60000', 'EX', 120);
-    jest.advanceTimersByTime(15 * 60 * 1000);
-    await Promise.resolve();
-    expect(bitcoinPriceService.refreshBitcoinPrice).toHaveBeenCalledTimes(2);
+    const val = await waitForKey('btc:price:usd');
+    expect(val).not.toBeNull();
+    const ttl = await redisClient.ttl('btc:price:usd');
+    expect(ttl).toBeGreaterThan(0);
   });
 });

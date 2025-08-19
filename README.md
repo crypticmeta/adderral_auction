@@ -5,6 +5,11 @@
 # ACORN Auction Platform
 
 ## Recent Updates
+- **Backend Tests: Real Services via Testcontainers (Live HTTP)**
+  - Jest runs against real Postgres and Redis containers (ephemeral) using Testcontainers
+  - Bitcoin price service tests perform real HTTP calls (no mocks) and assert Redis cache TTLs
+  - Scheduled tasks use a leak-safe interval with `.unref()` and expose `stopBitcoinPriceRefresh()` for tests
+  - Detailed logs added to global setup; Prisma generate/migrate executed automatically
 - **Animated Auction Progress Bar (Live-reactive)**
   - Lively gradient fill with shimmer and subtle bump on pledge-driven increases
   - Reacts in real time to `auction_status` WebSocket updates
@@ -281,11 +286,32 @@ Refund mechanism:
 ## Testing
 
 - Backend tests live under `backend/src/tests/`:
-  - `bitcoinPriceService.test.ts`: validates median calc, 30m cache, 3d long-cache fallback, and failure handling.
-  - `scheduledTasks.test.ts`: verifies 15m refresh cadence and warm TTL skip logic.
-  - `socketHandler.price.test.ts`: asserts `auction_status` payload sets `priceError` correctly and computes `currentMarketCap`/`currentPrice` from BTC price.
-- Tests now run against real Postgres and Redis using Testcontainers. Ensure Docker is running.
-- Install backend deps and run with `yarn test` from `backend/`.
+  - `bitcoinPriceService.test.ts`: uses live HTTP; validates median calc, short/long Redis caches, and failure handling.
+  - `scheduledTasks.test.ts`: starts the real scheduler and waits for Redis to populate; stops interval after each test.
+  - `socketHandler.price.test.ts`: uses live price service; asserts `priceError` semantics and computed fields.
+- Tests run against real Postgres and Redis using Testcontainers and require internet for live price APIs.
+- Ensure Docker is running; then from `backend/` run `yarn test`.
+
+### Testcontainers details (backend)
+
+- Global setup `backend/src/tests/setup/testcontainers.setup.ts`:
+  - Starts Postgres (`postgres:16`) and Redis (`redis:7-alpine`) containers
+  - Sets `DATABASE_URL` and `REDIS_*` env vars for the Jest process
+  - Runs `prisma generate` and `prisma migrate deploy` in the backend CWD
+  - Emits detailed logs; enable extra logs via `DEBUG=testcontainers*`
+- Per-test setup `backend/src/tests/setup/jest.setup.ts` clears Redis keys and truncates core tables for isolation.
+
+### Scheduler interval safety
+
+- `startBitcoinPriceRefresh()` creates a 15m interval and triggers an immediate refresh if cache is cold/warm-threshold violated.
+- Interval uses `.unref()` and can be stopped via `stopBitcoinPriceRefresh()` (used in tests to prevent leaks).
+
+### Troubleshooting tests
+
+- If Jest hangs or exits with leak warnings, try:
+  - `yarn test --detectOpenHandles`
+  - Ensure all intervals are cleared (tests should call `stopBitcoinPriceRefresh()` in `afterEach`)
+  - Confirm Docker is running and images can be pulled; verify network access for live price APIs
 
 ### Real DB/Redis (Testcontainers)
 

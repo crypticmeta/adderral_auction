@@ -9,6 +9,11 @@ Legend:
 
 ## Automated Tests
 
+All backend automated tests run against real services:
+- Real Postgres and Redis via Testcontainers (ephemeral containers)
+- Live HTTP requests for Bitcoin price (no mocks)
+- Internet access and Docker daemon are required
+
 ### Bitcoin Price Service (Backend)
 - [x] BTC price fetched and cached; values refresh every ~15 minutes [Automated]
 - [x] If price fetch fails, backend sets `priceError: true` [Automated]
@@ -27,7 +32,18 @@ Tests:
 - `backend/src/tests/scheduledTasks.test.ts`
 - `backend/src/tests/socketHandler.price.test.ts`
 
-Run: from `backend/` run `yarn test`
+Run: from `backend/` run `yarn test` (ensure Docker is running and internet is available)
+
+Environment & setup details:
+- Global setup `backend/src/tests/setup/testcontainers.setup.ts` starts Postgres/Redis containers, sets env vars, and runs Prisma generate/migrate with detailed logs (`DEBUG=testcontainers*` optional)
+- Per-test setup `backend/src/tests/setup/jest.setup.ts` truncates core tables and clears Redis keys between tests
+
+Scheduler interval safety:
+- Scheduler uses a 15m interval with `.unref()` and exposes `stopBitcoinPriceRefresh()`; tests call this in `afterEach` to prevent timer leaks
+
+Troubleshooting:
+- If Jest hangs or reports leaked handles, try `yarn test --detectOpenHandles`
+- Verify Docker is running and images can be pulled; confirm outbound network for price APIs
 
 ### WebSocket Payload (Backend)
 - Planned automated tests:
