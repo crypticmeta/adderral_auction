@@ -59,6 +59,12 @@
   - Added Inter font alias `font-inter`
   - Included `tailwindcss-animate` and `@tailwindcss/typography` plugins
 
+- **Tailwind Downgrade to v3 + Radix UI Integration**
+  - Downgraded frontend Tailwind to v3 (`tailwindcss@^3.4.x`) with PostCSS 8
+  - Switched PostCSS plugin to `tailwindcss` (removed `@tailwindcss/postcss`)
+  - Restored Tailwind v3 `content` array in `frontend/tailwind.config.ts`
+  - Installed Radix UI primitives for accessible components
+
 - **Bitcoin Wallet Adapter Docs**
   - Added `frontend/docs/bitcoin-wallet-adapter.md` summarizing provider setup, connect component, and hooks
 
@@ -211,7 +217,8 @@ Refund mechanism:
 ### Frontend
 - Next.js 15 with App Router
 - TypeScript
-- Tailwind CSS v4 (with @tailwindcss/postcss)
+- Tailwind CSS v3 (PostCSS 8)
+- Radix UI (Accordion, Dialog, Popover, Dropdown Menu, Tabs, Tooltip)
 - Bitcoin Wallet Adapter (Unisat, Xverse, Leather)
 - Socket.io Client
 - Redux Toolkit

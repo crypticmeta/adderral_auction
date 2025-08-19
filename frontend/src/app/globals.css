@@ -1,6 +1,8 @@
 /* File: globals.css - Global styles, theme variables, and custom utilities (gradients, glass, animations) */
-@config "../../tailwind.config.ts";
-@import "tailwindcss";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   --background: 240 10% 3.9%;

@@ -1,8 +1,8 @@
 // Tailwind CSS configuration merging gradients with CSS variable-driven theme, Inter font, and animations
 import type { Config } from 'tailwindcss'
 
-const config: Config = {
-  darkMode: 'class',
+export default {
+  darkMode: ['class'],
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
@@ -178,6 +178,4 @@ const config: Config = {
     },
   },
   plugins: [require('tailwindcss-animate'), require('@tailwindcss/typography')],
-}
-
-export default config
+} satisfies Config
