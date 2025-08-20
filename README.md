@@ -390,6 +390,7 @@ Refund mechanism:
     - `ghcr.io/<owner>/addrellauction-backend:<major>.<minor>` and `<major>` on `vX.Y.Z` tags
 - Images are multi-arch (amd64/arm64). Built via Yarn. Uses Docker Buildx cache.
 - Frontend Dockerfile isolates Yarn cache per-arch and locks cache mounts to avoid cross-arch cache corruption when resolving platform-specific Next.js SWC binaries during multi-arch builds.
+- Frontend runtime now uses Next.js standalone output. The image runs `node server.js` instead of `yarn start` to avoid requiring the `next` CLI in the final image. See `frontend/Dockerfile` and `frontend/next.config.ts` (with `output: 'standalone'`). This fixes CI/CD errors like `/bin/sh: next: not found` during container runtime.
 - Pull:
   ```bash
   docker pull ghcr.io/<owner>/addrellauction-frontend:latest

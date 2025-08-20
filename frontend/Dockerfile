@@ -35,7 +35,8 @@ COPY . .
 ENV NODE_ENV=production
 RUN yarn build
 
-# --- Runtime stage ---
+# --- Runtime stage (standalone) ---
+# What happens in this file: Build Next.js with Yarn, then run the standalone server (no node_modules/next needed at runtime).
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
@@ -43,16 +44,18 @@ ENV NODE_ENV=production
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
 
-# Copy only necessary files from builder
-COPY --from=builder /app/.next ./.next
+# Copy only the standalone server and required assets from builder
+# - .next/standalone contains server.js and the minimal node_modules needed
+# - .next/static contains static assets required by the server
+# - public contains public assets
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/yarn.lock ./yarn.lock
 
 # Expose Next.js port
 EXPOSE 3000
 
 USER 1001
 
-# Start Next.js
-CMD ["yarn", "start", "-p", "3000"]
+# Start Next.js standalone server
+CMD ["node", "server.js"]
