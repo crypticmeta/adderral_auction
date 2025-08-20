@@ -7,13 +7,11 @@ import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { Server } from 'socket.io';
 import { AuctionType, MultiWalletData } from '../types';
-import { BitcoinWalletService } from '../services/bitcoinWalletService';
 import { bitcoinPriceService } from '../services/bitcoinPriceService';
 import { redisClient } from '../config/redis';
 import { addHours } from 'date-fns';
 
 // Prisma client provided by singleton
-const bitcoinWalletService = BitcoinWalletService.getInstance();
 
 // Store the Socket.IO server instance
 let io: Server;
@@ -268,16 +266,7 @@ export const connectMultiWallet = async (req: Request, res: Response) => {
       });
     }
 
-    // Verify wallet ownership (basic check stub)
-    const verifyMsg = 'Verify multi-wallet ownership for Adderrels Auction';
-    const ok = await bitcoinWalletService.verifyWalletOwnership(
-      btcAddress,
-      signature || '',
-      verifyMsg
-    );
-    if (!ok) {
-      return res.status(400).json({ message: 'Multi-wallet ownership verification failed' });
-    }
+    // Signature verification removed per product decision; proceed without verification
 
     // Ensure user exists
     const existing = await prisma.user.findUnique({ where: { id: userId } });
