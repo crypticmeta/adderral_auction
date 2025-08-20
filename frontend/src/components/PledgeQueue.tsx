@@ -5,7 +5,7 @@
 // estimated ADDERRELS allocations per pledge based on current auction totals.
 import React, { useState, useEffect, useRef } from 'react';
 import { useWebSocket } from '../contexts/WebSocketContext';
-import type { PledgeItem, MaxPledgeInfo, QueuePositionEvent } from '../types';
+import type { PledgeItem, MaxPledgeInfo, QueuePositionEvent } from '@shared/types/common';
 
 interface PledgeQueueProps {
   auctionId: string;

@@ -9,6 +9,15 @@
   import type { TimeRemaining, AuctionProgressProps } from '@shared/types/auction';
   ```
   Type-only imports are erased at build time and are safe in both projects.
+
+### Common app types
+
+- Additional shared types live in `shared/types/common.ts` (wallet metadata, pledge queue items, minimal auction shapes, etc.).
+- Central barrel export: `shared/types/index.ts` so you can also do:
+  ```ts
+  import type { AuctionState, PledgeItem, WalletInfo } from '@shared/types';
+  ```
+- The legacy `frontend/src/types/` directory has been migrated/removed. All imports should use `@shared/types/*` going forward.
 A new background task now verifies pledge txids against mempool.space and marks pledges as verified when confirmed. Configurable via env (see Backend runtime/env notes).
 
 - **Tx Confirmation Service (background)**

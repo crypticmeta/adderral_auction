@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useWalletAddress, usePayBTC } from 'bitcoin-wallet-adapter';
-import type { WalletInfo, MaxPledgeInfo, DepositAddressResponse, PledgeItem } from '../types';
+import type { WalletInfo, MaxPledgeInfo, DepositAddressResponse, PledgeItem } from '@shared/types/common';
 
 interface PledgeFormProps {
   isWalletConnected: boolean;

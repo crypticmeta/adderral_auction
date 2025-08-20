@@ -1,5 +1,5 @@
-// types/index.ts
-// Purpose: Centralized TypeScript types for frontend components to avoid drift and conflicts.
+// Common shared types used across frontend and possibly backend
+// Includes wallet metadata, pledge queue items, and minimal state shapes.
 
 export type Network = 'mainnet' | 'testnet' | string;
 
@@ -21,8 +21,8 @@ export interface MaxPledgeInfo {
   minPledge: number; // BTC
   maxPledge: number; // BTC
   currentBTCPrice: number; // USD
-  minPledgeUSD: number; // USD
-  maxPledgeUSD: number; // USD
+  minPledgeUSD?: number; // USD (optional if not provided by backend)
+  maxPledgeUSD?: number; // USD (optional if not provided by backend)
 }
 
 export interface PledgeUser {
