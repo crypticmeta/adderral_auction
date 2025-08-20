@@ -11,6 +11,11 @@
   - Cleaned demo-related comment wording in `frontend/src/components/auction-progress.tsx`.
   - Ensured null-safety and production-ready UI copy (no demo/preview mentions).
 
+- **Public Stats Page + Endpoint**
+  - New Next.js page at `/stats` shows total BTC pledged in the last 24h, 48h, and 72h.
+  - Backend public endpoint `GET /api/pledges/stats` returns these totals (scoped to active auction if present; otherwise across all).
+  - Files: `frontend/src/app/stats/page.tsx`, `backend/src/controllers/pledgeController.ts#getPledgeStats`, `backend/src/routes/pledgeRoutes.ts`.
+
 - **Backend Tests: Real Services via Testcontainers (Live HTTP)**
   - Jest runs against real Postgres and Redis containers (ephemeral) using Testcontainers
   - Bitcoin price service tests perform real HTTP calls (no mocks) and assert Redis cache TTLs

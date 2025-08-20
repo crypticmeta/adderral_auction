@@ -5,7 +5,8 @@ import {
   getPledges,
   getUserPledges,
   calculateMaxPledge,
-  processNextPledge
+  processNextPledge,
+  getPledgeStats
 } from '../controllers/pledgeController';
 
 const router = express.Router();
@@ -27,5 +28,8 @@ router.get('/max-pledge/:auctionId', calculateMaxPledge);
 
 // Process the next pledge in the queue
 router.post('/process-next/:auctionId', processNextPledge);
+
+// Public pledge stats (last 24/48/72 hours)
+router.get('/stats', getPledgeStats);
 
 export default router;

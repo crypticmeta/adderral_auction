@@ -27,6 +27,46 @@ export const setSocketServer = (socketServer: Server) => {
 };
 
 /**
+ * Get pledge totals for the last 24/48/72 hours (public)
+ * Summarizes total BTC pledged by time window. If an active auction exists, scopes to that auction; otherwise sums across all.
+ */
+export const getPledgeStats = async (_req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const t24 = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const t48 = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+    const t72 = new Date(now.getTime() - 72 * 60 * 60 * 1000);
+
+    // Try to scope to active auction when available
+    const activeAuction = await prisma.auction.findFirst({ where: { isActive: true } });
+    const auctionWhere = activeAuction ? { auctionId: activeAuction.id } : {};
+
+    // Independent 24h windows: [now-24h, now), [now-48h, now-24h), [now-72h, now-48h)
+    const [sum0to24, sum24to48, sum48to72] = await Promise.all([
+      prisma.pledge.aggregate({ _sum: { btcAmount: true }, where: { ...auctionWhere, timestamp: { gte: t24, lt: now } } }),
+      prisma.pledge.aggregate({ _sum: { btcAmount: true }, where: { ...auctionWhere, timestamp: { gte: t48, lt: t24 } } }),
+      prisma.pledge.aggregate({ _sum: { btcAmount: true }, where: { ...auctionWhere, timestamp: { gte: t72, lt: t48 } } }),
+    ]);
+
+    return res.status(200).json({
+      scope: activeAuction ? { type: 'active_auction', auctionId: activeAuction.id } : { type: 'all' },
+      totals: {
+        last24h: sum0to24._sum.btcAmount || 0,
+        last48h: sum24to48._sum.btcAmount || 0,
+        last72h: sum48to72._sum.btcAmount || 0,
+      },
+      generatedAt: now.toISOString(),
+    });
+  } catch (error) {
+    console.error('Error getting pledge stats:', error);
+    return res.status(500).json({
+      error: 'Failed to get pledge stats',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+};
+
+/**
  * Calculate the maximum pledge amount for an auction (internal helper)
  */
 const calculateMaxPledgeInternal = async (auction: any): Promise<number> => {

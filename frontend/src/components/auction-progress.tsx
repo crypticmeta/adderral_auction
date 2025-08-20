@@ -63,9 +63,6 @@ export function AuctionProgress({
     <div className="glass-card p-8 rounded-3xl">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-2xl font-bold">Auction Progress</h3>
-        <div className="w-8 h-8 bg-gradient-to-r from-adderrels-500 to-adderrels-600 rounded-full p-1.5">
-          <img src="/adderrel.png" alt="Progress" className="w-full h-full object-contain" />
-        </div>
       </div>
 
       {/* Countdown Timer */}
@@ -125,8 +122,8 @@ export function AuctionProgress({
           >
             <div
               className={`absolute inset-0 ${ceilingReached
-                  ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600'
-                  : 'bg-gradient-to-r from-adderrels-500 via-adderrels-400 to-adderrels-600'
+                ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600'
+                : 'bg-gradient-to-r from-adderrels-500 via-adderrels-400 to-adderrels-600'
                 } gradient-animate progress-glow`}
             />
             {/* Shimmer overlay (only over filled portion) */}
