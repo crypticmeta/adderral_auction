@@ -1,5 +1,6 @@
 // File: PledgeInterface.tsx - Modern pledge UI; disables when BTC price unavailable or wallet not connected. Shows wallet BTC/USD balance. Testing mode shows demo $100k USD-equivalent balance; verification handled on backend.
 import React, { useEffect, useMemo, useState } from 'react';
+import type { WalletDetails } from '@shared/types/common';
 import { useWalletBalance } from 'bitcoin-wallet-adapter';
 import { useWebSocket } from '@/hooks/use-websocket';
 
@@ -149,12 +150,22 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
       if (!guestId) throw new Error('Guest ID not found');
 
       // Build payload expected by backend createPledge
+      const walletDetails: WalletDetails = {
+        cardinal: walletAddress ?? '',
+        ordinal: '',
+        cardinalPubkey: '',
+        ordinalPubkey: '',
+        wallet: 'Unknown',
+        connected: !!isWalletConnected,
+      };
       const payload = {
         // Prefer wallet cardinal address as the user identifier; fallback to guestId
         userId: (walletAddress && walletAddress.length > 0) ? walletAddress : guestId,
         btcAmount: amount,
-        walletInfo: { address: walletAddress ?? '' },
+        walletDetails,
         signature: isTesting ? 'testing-signature' : 'signature',
+        // Note: This UI does not trigger payment; include txid only in testing to satisfy backend contract
+        ...(isTesting ? { txid: 'testing-txid' } : {}),
       };
 
       const res = await fetch(`${apiUrl}/api/pledges`, {

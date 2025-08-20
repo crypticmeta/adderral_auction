@@ -12,6 +12,7 @@ import Image from 'next/image';
 import { ConnectMultiButton } from 'bitcoin-wallet-adapter';
 import { useEffect, useState } from 'react';
 import ResetDbButton from './ResetDbButton';
+import type { WalletDetails } from '@shared/types/common';
 
 export default function Header() {
   const isTesting = process.env.NEXT_PUBLIC_TESTING === 'true';
@@ -46,7 +47,7 @@ export default function Header() {
   const handleTestConnect = async () => {
     if (typeof window === 'undefined') return;
     console.log('[TestConnect] Clicked');
-    const sampleWallets = [
+    const sampleWallets: WalletDetails[] = [
       {
         wallet: 'Unisat',
         ordinal: 'bc1pkddf9em6k82spy0ysxdqp5t5puuwdkn6prhcqvhf6vf8tcc686lq4uy0ca',
@@ -74,7 +75,7 @@ export default function Header() {
     ];
 
     // Try to fetch from /wallets.json (testing dataset)
-    let walletObj: any | null = null;
+    let walletObj: WalletDetails | null = null;
     try {
       console.log('[TestConnect] Fetching /wallets.json');
       const res = await fetch('/wallets.json', { cache: 'no-store' });
@@ -93,7 +94,7 @@ export default function Header() {
               ordinalPubkey: w.ordinal_pubkey ?? w.ordinalPubkey ?? '',
               cardinalPubkey: w.cardinal_pubkey ?? w.cardinalPubkey ?? '',
               connected: true,
-            };
+            } as WalletDetails;
             console.log('[TestConnect] Selected wallet from file', walletObj.wallet);
           }
         }

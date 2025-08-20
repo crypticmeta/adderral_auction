@@ -189,9 +189,9 @@ const calculateMaxPledgeInternal = async (auction: any): Promise<number> => {
  */
 export const createPledge = async (req: Request, res: Response) => {
   try {
-    const { userId, btcAmount, walletInfo, signature, txid, depositAddress: depositFromBody } = req.body;
+    const { userId, btcAmount, walletDetails, signature, txid, depositAddress: depositFromBody } = req.body as any;
 
-    if (!userId || !btcAmount || !walletInfo || !txid) {
+    if (!userId || !btcAmount || !walletDetails || !txid) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -224,6 +224,10 @@ export const createPledge = async (req: Request, res: Response) => {
     // Use provided deposit address when available (recommended); fallback to placeholder
     const depositAddress = depositFromBody ?? `btc_deposit_${Date.now().toString(16)}`;
 
+    // Normalize wallet fields from walletDetails
+    const cardinalAddress: string | null = (walletDetails?.cardinal as string | undefined) || null;
+    const ordinalAddress: string | null = (walletDetails?.ordinal as string | undefined) || null;
+
     // Create the pledge in the database
     const pledge = await prisma.pledge.create({
       data: {
@@ -233,8 +237,8 @@ export const createPledge = async (req: Request, res: Response) => {
         auctionId: auction.id,
         depositAddress,
         signature: signature ?? null,
-        cardinal_address: walletInfo?.address ?? null,
-        ordinal_address: walletInfo?.ordinalAddress ?? null,
+        cardinal_address: cardinalAddress,
+        ordinal_address: ordinalAddress,
         // inherit network from auction to route mempool queries correctly
         network: auction.network,
         processed: false,

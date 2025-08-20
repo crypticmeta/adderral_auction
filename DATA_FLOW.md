@@ -41,7 +41,7 @@ This document outlines how data moves across the system: frontend (Next.js), bac
 5) Pay BTC, Then Create Pledge (HTTP)
 - Wallet pays the returned `depositAddress`; wallet returns a `txid`.
 - Endpoint: `POST /api/pledges` → `createPledge()`.
-- __Body required__: `{ userId, btcAmount, walletInfo, depositAddress, txid }`.
+- __Body required__: `{ userId, btcAmount, walletDetails, depositAddress, txid }`.
 - Validates min/max and requires `txid`. Creates `Pledge` with `status='pending'`, `confirmations=0`, `verified=false`.
 - Enqueues pledge to Redis ZSET by `timestamp`; emits `pledge:created` and `pledge:queue:position`.
 
@@ -164,7 +164,7 @@ Models used: `Auction`, `Pledge`, `User` (see Models section below).
   - __Returns__: `{ depositAddress, network }` where `depositAddress` is read from env `BTC_DEPOSIT_ADDRESS`.
 
 * __POST `/api/pledges`__ → `createPledge()`
-  - __Body required__: `{ userId: string, btcAmount: number|string, walletInfo: { address?: string }, depositAddress: string, txid: string }`
+  - __Body required__: `{ userId: string, btcAmount: number|string, walletDetails: { cardinal?: string, ordinal?: string, cardinalPubkey?: string, ordinalPubkey?: string, wallet?: string, connected?: boolean }, depositAddress: string, txid: string }`
   - __Behavior__: Validates against active `Auction` min/max (sats converted to BTC). Requires `txid`. Creates `Pledge` with pending status, enqueues to Redis, broadcasts.
   - __Returns__: created `Pledge` `+ { queuePosition: number }` including `user` relation.
 

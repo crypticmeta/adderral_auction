@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useWalletAddress, usePayBTC } from 'bitcoin-wallet-adapter';
-import type { WalletInfo, MaxPledgeInfo, DepositAddressResponse, PledgeItem } from '@shared/types/common';
+import type { MaxPledgeInfo, DepositAddressResponse, PledgeItem, WalletDetails } from '@shared/types/common';
 
 interface PledgeFormProps {
   isWalletConnected: boolean;
@@ -22,7 +22,7 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
 
   const { auctionState, isAuthenticated, socket } = useWebSocket();
   const isTesting = process.env.NEXT_PUBLIC_TESTING === 'true';
-  const walletAddr = useWalletAddress?.() as any;
+  const walletAddr = useWalletAddress?.() as Partial<WalletDetails> | null;
   const { payBTC } = usePayBTC?.() as any;
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -160,39 +160,38 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
       const guestId = typeof window !== 'undefined' ? localStorage.getItem('guestId') : null;
       const userId = guestId || undefined;
 
-      // Build wallet info based on mode
-      let walletInfo: WalletInfo | null = null;
+      // Build wallet details based on mode
+      let walletDetails: WalletDetails | null = null;
 
       if (isTesting) {
         const testWalletRaw = typeof window !== 'undefined' ? localStorage.getItem('testWallet') : null;
         const testWallet = (() => {
           try { return testWalletRaw ? JSON.parse(testWalletRaw) : null; } catch { return null; }
         })();
-        walletInfo = testWallet ? {
-          address: testWallet.cardinal || testWallet.cardinal_address || null,
-          ordinalAddress: testWallet.ordinal || testWallet.ordinal_address || null,
-          publicKey: testWallet.cardinalPubkey || testWallet.cardinal_pubkey || null,
-          ordinalPubKey: testWallet.ordinalPubkey || testWallet.ordinal_pubkey || null,
-          wallet: testWallet.wallet || 'TestWallet',
-          network: 'mainnet',
+        walletDetails = testWallet ? {
+          cardinal: String(testWallet.cardinal || testWallet.cardinal_address || ''),
+          ordinal: String(testWallet.ordinal || testWallet.ordinal_address || ''),
+          cardinalPubkey: String(testWallet.cardinalPubkey || testWallet.cardinal_pubkey || ''),
+          ordinalPubkey: String(testWallet.ordinalPubkey || testWallet.ordinal_pubkey || ''),
+          wallet: String(testWallet.wallet || 'TestWallet'),
+          connected: true,
         } : null;
         // No signature in testing mode
       } else {
         // Use real wallet details from bitcoin-wallet-adapter
-        const address = walletAddr?.cardinal ?? walletAddr?.address ?? null;
-        const ordinalAddress = walletAddr?.ordinal ?? walletAddr?.taproot ?? null;
-        const publicKey = walletAddr?.cardinalPubkey ?? walletAddr?.publicKey ?? null;
-        const ordinalPubKey = walletAddr?.ordinalPubkey ?? walletAddr?.taprootPubkey ?? null;
-        const wallet = walletAddr?.wallet ?? null;
-        const network = walletAddr?.network ?? 'mainnet';
+        const cardinal = walletAddr?.cardinal ?? '';
+        const ordinal = walletAddr?.ordinal ?? '';
+        const cardinalPubkey = walletAddr?.cardinalPubkey ?? '';
+        const ordinalPubkey = walletAddr?.ordinalPubkey ?? '';
+        const wallet = walletAddr?.wallet ?? 'Unknown';
 
-        walletInfo = {
-          address: address ?? null,
-          ordinalAddress: ordinalAddress ?? null,
-          publicKey: publicKey ?? null,
-          ordinalPubKey: ordinalPubKey ?? null,
-          wallet: wallet ?? null,
-          network,
+        walletDetails = {
+          cardinal: String(cardinal || ''),
+          ordinal: String(ordinal || ''),
+          cardinalPubkey: String(cardinalPubkey || ''),
+          ordinalPubkey: String(ordinalPubkey || ''),
+          wallet: String(wallet || 'Unknown'),
+          connected: true,
         };
 
         // No pre-pledge signature; payment itself serves as proof of control.
@@ -201,13 +200,13 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
       if (!userId) {
         throw new Error('Missing user identity. Please refresh the page to initialize connection.');
       }
-      if (!walletInfo || !walletInfo.address) {
+      if (!walletDetails || !walletDetails.cardinal) {
         throw new Error('Missing wallet info. Please connect your wallet first.');
       }
       // New flow: get deposit address (with retry), pay, obtain txid, then create pledge with txid
       const addrData: DepositAddressResponse = await fetchDepositAddressWithRetry(1, 500);
       const depositAddress: string | null = addrData?.depositAddress ?? null;
-      const network: string = walletInfo?.network || walletAddr?.network || addrData?.network || 'mainnet';
+      const network: string = (walletAddr as any)?.network || addrData?.network || 'mainnet';
       const sats = Math.round(amount * 1e8);
       if (!depositAddress || !Number.isFinite(sats) || sats <= 0) {
         throw new Error('Missing or invalid deposit details.');
@@ -229,7 +228,7 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
       }
 
       // Optional: re-check ceiling; proceed regardless to allow refund tracking
-      const payload: any = { userId, btcAmount: amount, walletInfo, txid: txFromPay, depositAddress };
+      const payload: any = { userId, btcAmount: amount, walletDetails, txid: txFromPay, depositAddress };
 
       const response = await fetch(`${apiUrl}/api/pledges/`, {
         method: 'POST',

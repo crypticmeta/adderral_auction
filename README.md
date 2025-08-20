@@ -15,9 +15,13 @@
 - Additional shared types live in `shared/types/common.ts` (wallet metadata, pledge queue items, minimal auction shapes, etc.).
 - Central barrel export: `shared/types/index.ts` so you can also do:
   ```ts
-  import type { AuctionState, PledgeItem, WalletInfo } from '@shared/types';
+  import type { AuctionState, PledgeItem, WalletDetails } from '@shared/types';
   ```
 - The legacy `frontend/src/types/` directory has been migrated/removed. All imports should use `@shared/types/*` going forward.
+
+- Canonical wallet shape: `WalletDetails` in `shared/types/common.ts`
+  - Matches bitcoin-wallet-adapter output: `{ cardinal, cardinalPubkey, ordinal, ordinalPubkey, connected, wallet, derivationPath? }`
+  - Use `WalletDetails` across frontend and backend. Backend `createPledge` accepts `walletDetails` directly. The legacy `WalletInfo` has been removed.
 A new background task now verifies pledge txids against mempool.space and marks pledges as verified when confirmed. Configurable via env (see Backend runtime/env notes).
 
 - **Tx Confirmation Service (background)**
@@ -44,7 +48,7 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Motivation: Store all information provided by bitcoin-wallet-adapter (cardinal + ordinal).
  - **API change: Pledges (pay-first flow, single deposit address)**
   - Get deposit address: `GET /api/pledges/deposit-address` → returns `{ depositAddress, network }` where `depositAddress` is read from env `BTC_DEPOSIT_ADDRESS`.
-  - Create pledge after payment: `POST /api/pledges/` with `{ userId, btcAmount, walletInfo, depositAddress, txid }`.
+  - Create pledge after payment: `POST /api/pledges/` with `{ userId, btcAmount, walletDetails, depositAddress, txid }`.
   - Fetch pledges by cardinal address for an auction: `GET /api/pledges/auction/:auctionId/cardinal/:cardinalAddress`.
   - Frontend `PledgeForm.tsx` fetches the deposit address, triggers wallet `payBTC`, and only then creates the pledge with the returned `txid`. No verify or attach endpoints are used. Scheduler confirms on-chain.
 - **Backend stability fixes**
