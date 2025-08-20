@@ -41,6 +41,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Optionally skip lint/typecheck inside Docker build (run separately in CI for speed)
 ENV NEXT_DISABLE_ESLINT=1
 ENV NEXT_DISABLE_TYPECHECK=1
+
+# Build-time public envs injected via build-args from CI
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_WS_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 RUN --mount=type=cache,target=.next/cache \
     yarn build
 
@@ -60,6 +66,9 @@ RUN groupadd -g 1001 nodejs && useradd -m -u 1001 -g nodejs nextjs
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+
+# Ensure Next.js cache dir is writable by the non-root user
+RUN mkdir -p /app/.next/cache && chown -R 1001:1001 /app
 
 # Expose Next.js port
 EXPOSE 3000

@@ -47,8 +47,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     }
   })();
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-  const wsUrl = process.env.NEXT_PUBLIC_WS_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  // Build-time envs (baked during Next.js build)
+  const apiUrl = (process.env.NEXT_PUBLIC_API_URL || '').trim() || 'http://localhost:5000';
+  const wsUrl = (process.env.NEXT_PUBLIC_WS_URL || process.env.NEXT_PUBLIC_API_URL || '').trim() || 'http://localhost:5000';
 
   const transformToAuctionState = (data: any | null): AuctionState | null => {
     if (!data) return null;
