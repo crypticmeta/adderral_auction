@@ -110,7 +110,9 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
         const mapped = Array.isArray(data) ? data.map((p: any) => ({
           id: p?.id,
           userId: p?.userId ?? '',
-          btcAmount: Number(p?.btcAmount ?? (Number(p?.satAmount ?? 0) / 1e8) ?? 0),
+          btcAmount: p?.btcAmount != null
+            ? Number(p.btcAmount)
+            : (p?.satAmount != null ? Number(p.satAmount) / 1e8 : 0),
           timestamp: p?.timestamp ?? '',
           queuePosition: p?.queuePosition ?? null,
           processed: Boolean(p?.verified || (p?.status === 'verified') || (Number(p?.confirmations ?? 0) > 0)),

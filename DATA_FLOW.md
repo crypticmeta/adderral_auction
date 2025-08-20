@@ -23,7 +23,7 @@ This document outlines how data moves across the system: frontend (Next.js), bac
 ## Primary Flows
 
 1) Authentication (Guest)
-- User requests `POST /api/auth/guest-token`.
+- User requests `POST /api/auth/guest-id`.
 - Backend issues a JWT for client to open WebSocket + call APIs.
 
 2) WebSocket Init
@@ -43,7 +43,7 @@ This document outlines how data moves across the system: frontend (Next.js), bac
 - Endpoint: `POST /api/pledges` → `createPledge()`.
 - __Body required__: `{ userId, btcAmount, walletInfo, depositAddress, txid }`.
 - Validates min/max and requires `txid`. Creates `Pledge` with `status='pending'`, `confirmations=0`, `verified=false`.
-- Enqueues pledge to Redis ZSET by `timestamp`; emits `pledge_created` and `pledge:queue:position`.
+- Enqueues pledge to Redis ZSET by `timestamp`; emits `pledge:created` and `pledge:queue:position`.
 
 6) Background – Tx Confirmation Checker
 - Service: `backend/src/services/txConfirmationService.ts`.
@@ -168,7 +168,7 @@ Models used: `Auction`, `Pledge`, `User` (see Models section below).
   - __Behavior__: Validates against active `Auction` min/max (sats converted to BTC). Requires `txid`. Creates `Pledge` with pending status, enqueues to Redis, broadcasts.
   - __Returns__: created `Pledge` `+ { queuePosition: number }` including `user` relation.
 
-* __GET `/api/pledges/auction/:auctionId`__ → `getPledges()`
+* __GET `/api/auction/:auctionId/pledges`__ → `getPledges()` (canonical)
   - __Params__: `auctionId: string`
   - __Returns__: `Pledge[]` where `verified=false`, ordered by `timestamp asc`, each enriched with `{ queuePosition, processed, needsRefund }` and `user.select = { cardinal_address, ordinal_address }`.
 
@@ -242,8 +242,8 @@ Source: `backend/prisma/schema.prisma`.
 ## Supporting Endpoints
 - `GET /api/auction/status` – public auction snapshot.
 - `GET /api/pledges/stats` – totals last 24/48/72h (scoped to active auction when present).
-- `GET /api/pledges/:auctionId` – unverified pledges + queue positions/status.
-- `GET /api/pledges/user/:userId/:auctionId` – user-specific pledges with queue metadata.
+- `GET /api/auction/:auctionId/pledges` – unverified pledges + queue positions/status.
+- `GET /api/pledges/user/:userId/auction/:auctionId` – user-specific pledges with queue metadata.
 - `GET /api/pledges/max-pledge/:auctionId` – safe max pledge calculation considering queue + ceiling.
 
 ## External Integrations
@@ -253,7 +253,7 @@ Source: `backend/prisma/schema.prisma`.
 ## Event Timeline (Typical)
 1. User opens app → WebSocket connects → receives `auction_status`.
 2. User fetches deposit address → pays wallet → obtains `txid`.
-3. Client creates pledge with `txid` → DB insert pending → Redis enqueue → `pledge_created` + queue position.
+3. Client creates pledge with `txid` → DB insert pending → Redis enqueue → `pledge:created` + queue position.
 4. Background checker confirms → `verified=true` → `pledge_verified`.
 5. Operator processes next pledge → updates auction totals or flags refund → `pledge:processed`.
 6. Auction ends by time or ceiling → `auction_status` reflects completion.
