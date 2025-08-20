@@ -1,5 +1,10 @@
-// Countdown timer component for the auction
-// Ticks locally but synchronizes to server time using endTimeMs and serverTimeMs
+/**
+ * CountdownTimer component
+ * Purpose: Displays hours/minutes/seconds countdown for auction end.
+ * Behavior: Ticks locally and can synchronize to server time via endTimeMs/serverTimeMs.
+ * Styling: Tailwind UI using the adderrels theme (border-adderrels-500/30 cards).
+ * Null-safety: Falls back to safe defaults when props are missing or undefined.
+ */
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface CountdownTimerProps {
