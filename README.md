@@ -399,6 +399,12 @@ Refund mechanism:
   - Frontend: provide `NEXT_PUBLIC_*` at run.
   - Backend: `PORT` (default 5000), DB/Redis/JWT envs (see `.env.example`).
 
+### Backend runtime requirements and CI/CD fixes
+- **Prisma engines (OpenSSL)**: The backend Docker image installs `openssl` in both build and runtime stages, and Prisma `binaryTargets` include `native`, `debian-openssl-1.1.x`, and `debian-openssl-3.0.x` in `backend/prisma/schema.prisma`. This prevents query engine mismatches on Debian-based images.
+- **Redis connection**: Set `REDIS_URL` (e.g., `redis://redis:6379`) in your deployment. The app prefers `REDIS_URL`; only falls back to host/port. Avoid `localhost` in containers.
+- **Database**: Provide `DATABASE_URL` (Postgres). Migrations run via CI scripts or manually using `yarn prisma:migrate`.
+- **Ports/Health**: Backend listens on `PORT` (default 5000) and has a basic TCP healthcheck.
+
 ### Deployment notes (quick)
 - Frontend: expose 3000 behind CDN/ALB; put CloudFront in front for cache/static.
 - Backend: expose 5000 behind ALB with WebSocket + sticky sessions; health checks + autoscale.

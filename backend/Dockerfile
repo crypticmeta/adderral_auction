@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Install build tools for native deps (e.g., bcrypt)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ \
+    python3 make g++ openssl \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy manifests first (context is backend/ in CI)
@@ -29,6 +29,10 @@ RUN yarn build
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+
+# Install OpenSSL for Prisma query engine
+RUN apt-get update && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 
 # Copy only necessary artifacts
 COPY --from=builder /app/dist ./dist

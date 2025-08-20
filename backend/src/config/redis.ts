@@ -7,11 +7,14 @@ import { Redis } from 'ioredis';
 import config from './config';
 
 // Create Redis client
-const redisClient = new Redis({
-  host: config.redis.host,
-  port: config.redis.port,
-  password: config.redis.password || undefined,
-});
+// Prefer full REDIS_URL when available to avoid localhost defaults in containers
+const redisClient = config.redis?.url
+  ? new Redis(config.redis.url)
+  : new Redis({
+      host: config.redis?.host ?? 'localhost',
+      port: config.redis?.port ?? 6379,
+      password: config.redis?.password || undefined,
+    });
 
 redisClient.on('error', (err) => {
   console.error('Redis connection error:', err);
