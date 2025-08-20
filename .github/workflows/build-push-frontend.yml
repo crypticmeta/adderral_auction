@@ -1,6 +1,6 @@
 # Purpose: CI to build and push the frontend Docker image to GitHub Container Registry (GHCR)
 # Triggers: push to main (and tags), or changes under frontend/
-# Output: ghcr.io/<owner>/frontend:latest, ghcr.io/<owner>/frontend:<sha>, ghcr.io/<owner>/frontend:<semver>
+# Output: ghcr.io/<owner>/addrellauction-frontend:latest, ghcr.io/<owner>/addrellauction-frontend:<sha|branch|semver>
 
 name: Build & Push Frontend Image
 
@@ -19,8 +19,8 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  # Change IMAGE_NAME if you want a different image repo name. Must be lowercase.
-  IMAGE_NAME: frontend
+  # Descriptive image repo name (lowercase)
+  IMAGE_NAME: addrellauction-frontend
   CONTEXT_DIR: frontend
   DOCKERFILE: frontend/Dockerfile
 
@@ -59,7 +59,10 @@ jobs:
           tags: |
             type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
             type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
           labels: |
             org.opencontainers.image.source=${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}

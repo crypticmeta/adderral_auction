@@ -1,6 +1,6 @@
 # Purpose: CI to build and push the backend Docker image to GitHub Container Registry (GHCR)
 # Triggers: push to main (and tags), or changes under backend/
-# Output: ghcr.io/<owner>/backend:latest, ghcr.io/<owner>/backend:<sha>, ghcr.io/<owner>/backend:<semver>
+# Output: ghcr.io/<owner>/addrellauction-backend:latest, ghcr.io/<owner>/addrellauction-backend:<sha|branch|semver>
 
 name: Build & Push Backend Image
 
@@ -19,7 +19,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: backend
+  IMAGE_NAME: addrellauction-backend
   CONTEXT_DIR: backend
   DOCKERFILE: backend/Dockerfile
 
@@ -58,7 +58,10 @@ jobs:
           tags: |
             type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
             type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
           labels: |
             org.opencontainers.image.source=${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}

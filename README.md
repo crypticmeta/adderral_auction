@@ -349,15 +349,21 @@ Refund mechanism:
 
 - Workflows:
   - `.github/workflows/build-push-frontend.yml` builds `frontend/` and pushes:
-    - `ghcr.io/<owner>/frontend:latest`, `<short-sha>`, `<semver>` on `vX.Y.Z` tags
+    - `ghcr.io/<owner>/addrellauction-frontend:latest`
+    - `ghcr.io/<owner>/addrellauction-frontend:<short-sha>`
+    - `ghcr.io/<owner>/addrellauction-frontend:<branch>`
+    - `ghcr.io/<owner>/addrellauction-frontend:<major>.<minor>` and `<major>` on `vX.Y.Z` tags
   - `.github/workflows/build-push-backend.yml` builds `backend/` and pushes:
-    - `ghcr.io/<owner>/backend:latest`, `<short-sha>`, `<semver>` on `vX.Y.Z` tags
+    - `ghcr.io/<owner>/addrellauction-backend:latest`
+    - `ghcr.io/<owner>/addrellauction-backend:<short-sha>`
+    - `ghcr.io/<owner>/addrellauction-backend:<branch>`
+    - `ghcr.io/<owner>/addrellauction-backend:<major>.<minor>` and `<major>` on `vX.Y.Z` tags
 - Images are multi-arch (amd64/arm64). Built via Yarn. Uses Docker Buildx cache.
 - Frontend Dockerfile isolates Yarn cache per-arch and locks cache mounts to avoid cross-arch cache corruption when resolving platform-specific Next.js SWC binaries during multi-arch builds.
 - Pull:
   ```bash
-  docker pull ghcr.io/<owner>/frontend:latest
-  docker pull ghcr.io/<owner>/backend:latest
+  docker pull ghcr.io/<owner>/addrellauction-frontend:latest
+  docker pull ghcr.io/<owner>/addrellauction-backend:latest
   ```
 - Runtime envs:
   - Frontend: provide `NEXT_PUBLIC_*` at run.
