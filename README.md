@@ -1,3 +1,12 @@
+A new background task now verifies pledge txids against mempool.space and marks pledges as verified when confirmed. Configurable via env (see Backend runtime/env notes).
+
+- **Tx Confirmation Service (background)**
+  - New service `backend/src/services/txConfirmationService.ts` checks pending pledges with a `txid` and updates `status`, `confirmations`, `fee`, and `verified`.
+  - Scheduled every 30s via `startTxConfirmationChecks(io)` in `backend/src/services/scheduledTasks.ts` and wired in `backend/src/server.ts`.
+  - Network routing: uses `Pledge.network` (Prisma enum `BtcNetwork`) to pick mainnet vs testnet mempool base.
+  - Testing mode: when `TESTING=true`, returns random confirmations to simulate flow without hitting mempool.
+  - WebSocket: emits `pledge_verified` on confirmation via `broadcastPledgeVerified()`.
+
  - **Frontend UI Improvements**:
    - Set app favicon to `/public/adderrel.png` via Next.js metadata in `frontend/src/app/layout.tsx` (will switch after asset rename)
    - Configured `WalletProvider` to accept and pass `customAuthOptions` to `bitcoin-wallet-adapter` with Adderrels icon
@@ -391,6 +400,16 @@ Refund mechanism:
 - Images are multi-arch (amd64/arm64). Built via Yarn. Uses Docker Buildx cache.
 - Frontend Dockerfile isolates Yarn cache per-arch and locks cache mounts to avoid cross-arch cache corruption when resolving platform-specific Next.js SWC binaries during multi-arch builds.
 - Frontend runtime now uses Next.js standalone output. The image runs `node server.js` instead of `yarn start` to avoid requiring the `next` CLI in the final image. See `frontend/Dockerfile` and `frontend/next.config.ts` (with `output: 'standalone'`). This fixes CI/CD errors like `/bin/sh: next: not found` during container runtime.
+
+#### Frontend CI build optimizations
+- Debian slim base (`node:20-bookworm-slim`) replaces Alpine to speed up installs and avoid native rebuild slowdowns on arm64.
+- Next.js compiler cache mounted in Docker build: `--mount=type=cache,target=.next/cache` to cut rebuild times.
+- Telemetry disabled in build stage: `NEXT_TELEMETRY_DISABLED=1`.
+- Optional: skip lint/typecheck inside Docker build for faster images (set in `frontend/Dockerfile`):
+  - `NEXT_DISABLE_ESLINT=1`
+  - `NEXT_DISABLE_TYPECHECK=1`
+  Run `yarn lint` and `yarn tsc --noEmit` as separate CI steps if needed.
+- Workflow builds amd64 by default; multi-arch (amd64, arm64) only on `v*.*.*` tags to speed up regular pushes. See `.github/workflows/build-push-frontend.yml`.
 - Pull:
   ```bash
   docker pull ghcr.io/<owner>/addrellauction-frontend:latest
@@ -405,6 +424,11 @@ Refund mechanism:
 - **Redis connection**: Set `REDIS_URL` (e.g., `redis://redis:6379`) in your deployment. The app prefers `REDIS_URL`; only falls back to host/port. Avoid `localhost` in containers.
 - **Database**: Provide `DATABASE_URL` (Postgres). Migrations run via CI scripts or manually using `yarn prisma:migrate`.
 - **Ports/Health**: Backend listens on `PORT` (default 5000) and has a basic TCP healthcheck.
+ - **Tx Confirmation Service env**:
+   - `TESTING=true|false` to enable/disable random confirmation results (default false).
+   - `MEMPOOL_MAINNET_BASE` (default `https://mempool.space/api`).
+   - `MEMPOOL_TESTNET_BASE` (default `https://mempool.space/testnet/api`).
+   - Runs automatically at startup; no additional setup required.
 
 ### Deployment notes (quick)
 - Frontend: expose 3000 behind CDN/ALB; put CloudFront in front for cache/static.

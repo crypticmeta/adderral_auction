@@ -134,6 +134,8 @@ export const createPledge = async (req: Request, res: Response) => {
         signature,
         cardinal_address: walletInfo?.address ?? null,
         ordinal_address: depositAddress,
+        // inherit network from auction to route mempool queries correctly
+        network: auction.network,
         processed: false,
         needsRefund: false
       },

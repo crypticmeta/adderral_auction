@@ -67,7 +67,21 @@ jobs:
             org.opencontainers.image.source=${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
 
-      - name: Build and push
+      - name: Build and push (default: amd64 only)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.CONTEXT_DIR }}
+          file: ${{ env.DOCKERFILE }}
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ steps.vars.outputs.image }}:buildcache
+          cache-to: type=registry,ref=${{ steps.vars.outputs.image }}:buildcache,mode=max
+
+      - name: Build and push (release: multi-arch)
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         uses: docker/build-push-action@v6
         with:
           context: ${{ env.CONTEXT_DIR }}

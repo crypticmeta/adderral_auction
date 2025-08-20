@@ -7,10 +7,13 @@ import { PrismaClient } from '../generated/prisma';
 import { bitcoinPriceService } from './bitcoinPriceService';
 import { broadcastAuctionUpdate } from '../controllers/auctionController';
 import { redisClient } from '../config/redis';
+import { txConfirmationService } from './txConfirmationService';
+import type { Server } from 'socket.io';
 
 const prisma = new PrismaClient();
 
 let priceInterval: NodeJS.Timeout | null = null;
+let txCheckInterval: NodeJS.Timeout | null = null;
 
 // Check for expired auctions every minute
 export const startAuctionTimeCheck = () => {
@@ -47,6 +50,35 @@ export const stopBitcoinPriceRefresh = () => {
   if (priceInterval) {
     clearInterval(priceInterval);
     priceInterval = null;
+  }
+};
+
+// Periodically check unverified pledges' tx confirmations
+export const startTxConfirmationChecks = (io: Server) => {
+  console.log('Starting scheduled Tx confirmation check service');
+  // Run immediately on startup
+  txConfirmationService.checkUnverifiedPledges(io).catch((e) =>
+    console.error('Initial tx confirmation run error:', e)
+  );
+  // Then schedule every 30 seconds
+  if (txCheckInterval) {
+    clearInterval(txCheckInterval);
+    txCheckInterval = null;
+  }
+  txCheckInterval = setInterval(() => {
+    txConfirmationService.checkUnverifiedPledges(io).catch((e) =>
+      console.error('Periodic tx confirmation run error:', e)
+    );
+  }, 30 * 1000);
+  if (txCheckInterval && typeof (txCheckInterval as any).unref === 'function') {
+    (txCheckInterval as any).unref();
+  }
+};
+
+export const stopTxConfirmationChecks = () => {
+  if (txCheckInterval) {
+    clearInterval(txCheckInterval);
+    txCheckInterval = null;
   }
 };
 

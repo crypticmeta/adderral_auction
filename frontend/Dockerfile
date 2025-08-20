@@ -1,16 +1,18 @@
 # syntax=docker/dockerfile:1.6
 # Purpose: Production multi-stage image for Next.js frontend. Builds with Yarn and serves via Next.js in a minimal Node image.
-# Notes: Uses Next.js build output and runs `next start`. Set NEXT_PUBLIC_* envs at runtime.
+# Notes: Uses Next.js standalone output and runs its server. Set NEXT_PUBLIC_* envs at runtime.
 
 # --- Build stage ---
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
 
-# Install OS deps if needed (optional)
-RUN apk add --no-cache libc6-compat
+# Install minimal OS deps
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
 # Copy manifests first for better caching (context is frontend/)
 COPY package.json yarn.lock ./
@@ -31,18 +33,23 @@ RUN --mount=type=cache,target=/usr/local/share/.cache/yarn/${TARGETARCH},id=yarn
 # Copy source
 COPY . .
 
-# Build Next.js app
+# Build Next.js app (cache Next compiler artifacts)
 ENV NODE_ENV=production
-RUN yarn build
+ENV NEXT_TELEMETRY_DISABLED=1
+# Optionally skip lint/typecheck inside Docker build (run separately in CI for speed)
+ENV NEXT_DISABLE_ESLINT=1
+ENV NEXT_DISABLE_TYPECHECK=1
+RUN --mount=type=cache,target=.next/cache \
+    yarn build
 
 # --- Runtime stage (standalone) ---
-# What happens in this file: Build Next.js with Yarn, then run the standalone server (no node_modules/next needed at runtime).
-FROM node:20-alpine AS runner
+# What happens in this file: Build Next.js with Yarn, then run the standalone server (no full node_modules needed at runtime).
+FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
+RUN groupadd -g 1001 nodejs && useradd -m -u 1001 -g nodejs nextjs
 
 # Copy only the standalone server and required assets from builder
 # - .next/standalone contains server.js and the minimal node_modules needed

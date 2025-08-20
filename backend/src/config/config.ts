@@ -14,6 +14,13 @@ export default {
   socketIoSecret: process.env.SOCKET_IO_SECRET || 'adderrels_auction_socket_io_secret',
   rateLimit: parseInt(process.env.RATE_LIMIT_REQUESTS_PER_MINUTE || '60'),
   nodeEnv: process.env.NODE_ENV || 'development',
+  // Testing mode: enables random confirmation results in tx checker
+  testing: process.env.TESTING === 'true',
+  // Mempool API bases
+  mempool: {
+    mainnetBase: process.env.MEMPOOL_MAINNET_BASE || 'https://mempool.space/api',
+    testnetBase: process.env.MEMPOOL_TESTNET_BASE || 'https://mempool.space/testnet/api'
+  },
   database: {
     url: process.env.DATABASE_URL,
     host: process.env.POSTGRES_HOST || 'localhost',

@@ -15,7 +15,7 @@ import { initializeSocketIO } from './websocket/socketHandler';
 import { setSocketServer } from './controllers/pledgeController';
 import { setSocketServer as setAuctionSocketServer } from './controllers/auctionController';
 import { PrismaClient } from './generated/prisma';
-import { startAuctionTimeCheck, startBitcoinPriceRefresh } from './services/scheduledTasks';
+import { startAuctionTimeCheck, startBitcoinPriceRefresh, startTxConfirmationChecks } from './services/scheduledTasks';
 import './config/redis'; // Initialize Redis connection
 
 // Initialize Prisma client
@@ -42,6 +42,7 @@ setAuctionSocketServer(io);
 // Start scheduled tasks
 startAuctionTimeCheck();
 startBitcoinPriceRefresh();
+startTxConfirmationChecks(io);
 
 // Routes
 app.use('/api/auth', authRoutes);
