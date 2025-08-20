@@ -4,31 +4,48 @@
 # --- Build stage ---
 FROM node:20-bookworm-slim AS builder
 WORKDIR /app
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
 
 # Install build tools for native deps (e.g., bcrypt)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ openssl \
+    python3 make g++ openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy manifests first (context is backend/ in CI)
 COPY package.json yarn.lock ./
 
-# Install all deps for build
-RUN yarn install --frozen-lockfile
+# Yarn performance settings and cache folder per-arch
+ARG YARN_NETWORK_TIMEOUT=600000
+ENV YARN_CACHE_FOLDER=/usr/local/share/.cache/yarn/${TARGETARCH}
+RUN yarn config set registry https://registry.yarnpkg.com \
+  && yarn config set network-timeout ${YARN_NETWORK_TIMEOUT} \
+  && yarn config set prefer-offline true
+
+# Install all deps for build with BuildKit cache mounts
+RUN --mount=type=cache,target=/usr/local/share/.cache/yarn/${TARGETARCH},id=yarn-cache-${TARGETARCH},sharing=locked \
+    --mount=type=cache,target=/root/.cache/${TARGETARCH},id=root-cache-${TARGETARCH},sharing=locked \
+    yarn install --frozen-lockfile --network-timeout ${YARN_NETWORK_TIMEOUT}
+
+# Copy Prisma schema early to cache prisma generate
+COPY prisma ./prisma
+
+# Generate Prisma client (cached unless prisma/ or deps change)
+RUN npx prisma generate
 
 # Copy source
 COPY . .
 
-# Generate Prisma client
-RUN npx prisma generate
-
 # Build TypeScript
+ENV NODE_OPTIONS=--max_old_space_size=2048
 RUN yarn build
 
 # --- Runtime stage ---
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+ENV NODE_OPTIONS=--max_old_space_size=1024
 
 # Install OpenSSL for Prisma query engine
 RUN apt-get update && apt-get install -y --no-install-recommends openssl \

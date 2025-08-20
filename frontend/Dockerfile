@@ -35,6 +35,8 @@ COPY . .
 
 # Build Next.js app (cache Next compiler artifacts)
 ENV NODE_ENV=production
+# Give Next.js more memory to speed large builds
+ENV NODE_OPTIONS=--max_old_space_size=4096
 ENV NEXT_TELEMETRY_DISABLED=1
 # Optionally skip lint/typecheck inside Docker build (run separately in CI for speed)
 ENV NEXT_DISABLE_ESLINT=1
@@ -61,6 +63,10 @@ COPY --from=builder /app/public ./public
 
 # Expose Next.js port
 EXPOSE 3000
+
+# Basic TCP healthcheck for Kubernetes
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD node -e "require('net').createConnection({host:'127.0.0.1',port:process.env.PORT||3000}).on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))" || exit 1
 
 USER 1001
 
