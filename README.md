@@ -5,6 +5,20 @@
 # Adderrels Auction Platform
 
 ## Recent Updates
+- **Auction Min/Max in Sats (breaking change)**
+  - Replaced `Auction.minPledge`/`maxPledge` (BTC float) with `minPledgeSats`/`maxPledgeSats` (Int, sats) in `backend/prisma/schema.prisma`.
+  - Backend controllers and WebSocket outputs now convert sats -> BTC only for responses.
+  - Seed uses sats for min/max and for pledges.
+  - Migration backfills new columns from existing BTC floats then drops old columns.
+  - After pulling: run `yarn prisma:generate && yarn prisma:migrate && yarn seed` from `backend/`.
+- **Schema: Network + Pledge fields**
+  - Added Prisma `enum BtcNetwork { MAINNET, TESTNET }`.
+  - `Auction.network: BtcNetwork @default(TESTNET)`.
+  - `Pledge.network: BtcNetwork @default(TESTNET)`.
+  - Replaced `Pledge.btcAmount: Float` with `satAmount: Int` (store sats, avoid float).
+  - Renamed `Pledge.sender -> cardinal_address` and `recipient -> ordinal_address`.
+  - Enforced one pledge per user per auction via `@@unique([auctionId, userId])`.
+  - Migration required (see below).
 - **Pledge UI: Wallet Balance Display**
   - `frontend/src/components/PledgeInterface.tsx` now shows connected wallet balance in BTC and approx USD using `useWalletBalance()` from `bitcoin-wallet-adapter`.
   - Added null checks, manual refresh, and disables pledging when input exceeds confirmed balance.
@@ -203,6 +217,22 @@ adderrels-auction/
    yarn test:coverage
    ```
 
+### DB Migration (after schema changes)
+
+From `backend/` run:
+
+```bash
+yarn prisma:generate
+yarn prisma:migrate
+yarn seed
+```
+
+Notes:
+- This creates/applies Prisma migrations to your Postgres and reseeds data.
+- Update backend code where `Pledge.btcAmount`, `sender`, `recipient` were used to `satAmount`, `cardinal_address`, `ordinal_address` respectively.
+- Update `minPledge` and `maxPledge` fields to use satoshi values (e.g., `100000` for 0.001 BTC).
+- When computing totals, convert sats to BTC using integer math and format at the edges.
+
 ### Frontend Setup
 
 1. Navigate to the frontend directory:
@@ -243,8 +273,8 @@ The Adderrels auction follows a First Come, First Served (FCFS) model with these
 - Total tokens for sale: 100 million (10% of total supply)
 - Ceiling market cap: $15 million
 - Auction duration: 72 hours
-- Minimum pledge: 0.001 BTC
-- Maximum pledge: 0.5 BTC
+- Minimum pledge: 0.001 BTC (stored as 100,000 sats)
+- Maximum pledge: 0.5 BTC (stored as 50,000,000 sats)
 
 Auction scenarios:
 - Scenario 1: Ceiling market cap reached before 72 hours, auction ends immediately

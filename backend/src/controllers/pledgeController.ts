@@ -43,17 +43,18 @@ export const getPledgeStats = async (_req: Request, res: Response) => {
 
     // Independent 24h windows: [now-24h, now), [now-48h, now-24h), [now-72h, now-48h)
     const [sum0to24, sum24to48, sum48to72] = await Promise.all([
-      prisma.pledge.aggregate({ _sum: { btcAmount: true }, where: { ...auctionWhere, timestamp: { gte: t24, lt: now } } }),
-      prisma.pledge.aggregate({ _sum: { btcAmount: true }, where: { ...auctionWhere, timestamp: { gte: t48, lt: t24 } } }),
-      prisma.pledge.aggregate({ _sum: { btcAmount: true }, where: { ...auctionWhere, timestamp: { gte: t72, lt: t48 } } }),
+      prisma.pledge.aggregate({ _sum: { satAmount: true }, where: { ...auctionWhere, timestamp: { gte: t24, lt: now } } }),
+      prisma.pledge.aggregate({ _sum: { satAmount: true }, where: { ...auctionWhere, timestamp: { gte: t48, lt: t24 } } }),
+      prisma.pledge.aggregate({ _sum: { satAmount: true }, where: { ...auctionWhere, timestamp: { gte: t72, lt: t48 } } }),
     ]);
 
     return res.status(200).json({
       scope: activeAuction ? { type: 'active_auction', auctionId: activeAuction.id } : { type: 'all' },
       totals: {
-        last24h: sum0to24._sum.btcAmount || 0,
-        last48h: sum24to48._sum.btcAmount || 0,
-        last72h: sum48to72._sum.btcAmount || 0,
+        // return BTC for display
+        last24h: ((sum0to24._sum?.satAmount ?? 0) as number) / 1e8,
+        last48h: ((sum24to48._sum?.satAmount ?? 0) as number) / 1e8,
+        last72h: ((sum48to72._sum?.satAmount ?? 0) as number) / 1e8,
       },
       generatedAt: now.toISOString(),
     });
@@ -70,10 +71,12 @@ export const getPledgeStats = async (_req: Request, res: Response) => {
  * Calculate the maximum pledge amount for an auction (internal helper)
  */
 const calculateMaxPledgeInternal = async (auction: any): Promise<number> => {
+  const minBTC = ((auction?.minPledgeSats ?? 0) as number) / 1e8;
+  const maxBTC = ((auction?.maxPledgeSats ?? 0) as number) / 1e8;
   return pledgeQueueService.calculateMaxPledgeAmount(
     auction.id,
-    auction.minPledge,
-    auction.maxPledge,
+    minBTC,
+    maxBTC,
     auction.ceilingMarketCap,
     auction.totalBTCPledged
   );
@@ -108,11 +111,12 @@ export const createPledge = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No active auction found' });
     }
 
-    // Validate pledge amount
+    // Validate pledge amount (compare in BTC, source of truth in sats)
     const maxPledge = await calculateMaxPledgeInternal(auction);
-    if (btcAmount < auction.minPledge || btcAmount > maxPledge) {
+    const minBTC = ((auction?.minPledgeSats ?? 0) as number) / 1e8;
+    if (Number(btcAmount) < minBTC || Number(btcAmount) > maxPledge) {
       return res.status(400).json({
-        error: `Pledge amount must be between ${auction.minPledge} and ${maxPledge} BTC`
+        error: `Pledge amount must be between ${minBTC} and ${maxPledge} BTC`
       });
     }
     
@@ -123,12 +127,13 @@ export const createPledge = async (req: Request, res: Response) => {
     const pledge = await prisma.pledge.create({
       data: {
         userId,
-        btcAmount,
+        // store in sats
+        satAmount: Math.round(Number(btcAmount) * 1e8),
         auctionId: auction.id,
         depositAddress,
         signature,
-        sender: walletInfo.address,
-        recipient: depositAddress,
+        cardinal_address: walletInfo?.address ?? null,
+        ordinal_address: depositAddress,
         processed: false,
         needsRefund: false
       },
@@ -141,10 +146,10 @@ export const createPledge = async (req: Request, res: Response) => {
     await pledgeQueueService.enqueuePledge({
       id: pledge.id,
       userId: pledge.userId,
-      btcAmount: pledge.btcAmount,
+      btcAmount: (pledge.satAmount ?? 0) / 1e8,
       auctionId: pledge.auctionId,
       timestamp: pledge.timestamp.toISOString(),
-      sender: pledge.sender || '',
+      sender: pledge.cardinal_address || '',
       depositAddress: pledge.depositAddress || '',
       signature: pledge.signature
     });
@@ -157,7 +162,7 @@ export const createPledge = async (req: Request, res: Response) => {
 
     // Broadcast the pledge creation event
     if (io) {
-      broadcastPledgeCreated(io, pledge);
+      broadcastPledgeCreated(io, pledge as any);
       // Also broadcast queue position separately
       io.emit('pledge:queue:position', { pledgeId: pledge.id, position: queuePosition });
     }
@@ -352,11 +357,13 @@ export const calculateMaxPledge = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Auction not found' });
     }
     
-    // Calculate max pledge amount
+    // Calculate max pledge amount (use sats fields converted to BTC)
+    const minBTC = ((auction?.minPledgeSats ?? 0) as number) / 1e8;
+    const maxBTC = ((auction?.maxPledgeSats ?? 0) as number) / 1e8;
     const maxAmount = await pledgeQueueService.calculateMaxPledgeAmount(
       auctionId,
-      auction.minPledge,
-      auction.maxPledge,
+      minBTC,
+      maxBTC,
       auction.ceilingMarketCap,
       auction.totalBTCPledged
     );
@@ -366,10 +373,10 @@ export const calculateMaxPledge = async (req: Request, res: Response) => {
     const btcPrice = await btcPriceService.getBitcoinPrice();
     
     return res.status(200).json({
-      minPledge: auction.minPledge,
-      maxPledge: maxAmount, // This is the calculated max, not the auction.maxPledge
+      minPledge: minBTC,
+      maxPledge: maxAmount, // calculated max in BTC
       currentBTCPrice: btcPrice,
-      minPledgeUSD: auction.minPledge * btcPrice,
+      minPledgeUSD: minBTC * btcPrice,
       maxPledgeUSD: maxAmount * btcPrice
     });
   } catch (error) {

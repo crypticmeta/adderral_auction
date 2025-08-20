@@ -11,6 +11,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Enum to determine Bitcoin network for auctions and pledges
+enum BtcNetwork {
+  MAINNET
+  TESTNET
+}
+
 model User {
   id             String   @id
   cardinal_address String?  // BTC address for payments (P2PKH/P2WPKH)
@@ -31,13 +37,13 @@ model Pledge {
   id             String   @id @default(uuid())
   userId         String
   user           User     @relation(fields: [userId], references: [id])
-  btcAmount      Float
+  satAmount      Int
   depositAddress String
   txid           String?
   fee            Float?
   confirmations  Int?     @default(0)
-  sender         String?
-  recipient      String?
+  cardinal_address String?
+  ordinal_address  String?
   status         String   @default("pending") // 'pending', 'confirmed', or 'failed'
   signature      String?  // Signature to verify wallet ownership
   timestamp      DateTime @default(now())
@@ -46,6 +52,9 @@ model Pledge {
   needsRefund    Boolean  @default(false)
   auctionId      String
   auction        Auction  @relation(fields: [auctionId], references: [id])
+  network        BtcNetwork @default(MAINNET)
+
+  @@unique([auctionId, userId])
 }
 
 model Auction {
@@ -58,10 +67,11 @@ model Auction {
   endTime         DateTime
   isActive        Boolean         @default(true)
   isCompleted     Boolean         @default(false)
-  minPledge       Float
-  maxPledge       Float
+  minPledgeSats   Int
+  maxPledgeSats   Int
   pledges         Pledge[]
   refundedPledges RefundedPledge[]
+  network         BtcNetwork @default(MAINNET)
 }
 
 model RefundedPledge {

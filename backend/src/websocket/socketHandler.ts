@@ -15,7 +15,7 @@ type PledgeWithUser = {
   id: string;
   userId: string;
   auctionId: string;
-  btcAmount: number;
+  satAmount: number; // sats
   depositAddress: string;
   txid?: string | null;
   fee?: number | null;
@@ -23,8 +23,8 @@ type PledgeWithUser = {
   status?: string | null;
   timestamp: Date;
   verified: boolean;
-  sender?: string | null;
-  recipient?: string | null;
+  cardinal_address?: string | null;
+  ordinal_address?: string | null;
   signature?: string | null;
   user: {
     id: string;
@@ -222,8 +222,9 @@ export const sendAuctionStatus = async (socket: any) => {
       totalTokens: auction.totalTokens,
       ceilingMarketCap: auction.ceilingMarketCap,
       currentMarketCap,
-      minPledge: auction.minPledge,
-      maxPledge: auction.maxPledge,
+      // convert sats -> BTC for client display
+      minPledge: ((auction as any)?.minPledgeSats ?? 0) / 1e8,
+      maxPledge: ((auction as any)?.maxPledgeSats ?? 0) / 1e8,
       ceilingReached,
       currentPrice,
       priceError,
@@ -232,7 +233,7 @@ export const sendAuctionStatus = async (socket: any) => {
         userId: pledge.userId,
         cardinal_address: pledge.user.cardinal_address,
         ordinal_address: pledge.user.ordinal_address,
-        btcAmount: pledge.btcAmount,
+        btcAmount: ((pledge as any).satAmount ?? 0) / 1e8,
         timestamp: pledge.timestamp,
         verified: pledge.verified
       }))
@@ -248,7 +249,7 @@ export const broadcastPledgeCreated = (io: Server, pledge: PledgeWithUser) => {
   io.emit(SocketEvents.PLEDGE_CREATED, {
     id: pledge.id,
     userId: pledge.userId,
-    btcAmount: pledge.btcAmount,
+    btcAmount: (pledge.satAmount ?? 0) / 1e8,
     depositAddress: pledge.depositAddress,
     txid: pledge.txid,
     timestamp: pledge.timestamp || new Date(),
@@ -266,7 +267,7 @@ export const broadcastPledgeVerified = (io: Server, pledge: PledgeWithUser) => {
   io.emit(SocketEvents.PLEDGE_VERIFIED, {
     id: pledge.id,
     userId: pledge.userId,
-    btcAmount: pledge.btcAmount,
+    btcAmount: (pledge.satAmount ?? 0) / 1e8,
     depositAddress: pledge.depositAddress,
     txid: pledge.txid,
     timestamp: pledge.timestamp || new Date(),

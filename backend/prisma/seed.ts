@@ -1,3 +1,5 @@
+// Seeds database with an admin, sample users, one active auction (72h),
+// and sample pledges. Uses sats (satAmount) and sets network to TESTNET.
 import { PrismaClient } from '../src/generated/prisma';
 import { addHours } from 'date-fns';
 
@@ -56,9 +58,9 @@ async function main() {
     })
   );
 
-  // Create a new auction that runs for 72 hours
+  // Create a new auction that runs for 24 hours
   const now = new Date();
-  const endTime = addHours(now, 72);
+  const endTime = addHours(now, 24);
 
   const auction = await prisma.auction.create({
     data: {
@@ -71,8 +73,10 @@ async function main() {
       endTime,
       isActive: true,
       isCompleted: false,
-      minPledge: 0.001, // 0.001 BTC minimum pledge
-      maxPledge: 0.5,   // 0.5 BTC maximum pledge
+      // min/max in sats
+      minPledgeSats: 100_000, // 0.001 BTC
+      maxPledgeSats: 50_000_000, // 0.5 BTC
+      network: 'MAINNET',
     },
   });
 
@@ -82,7 +86,8 @@ async function main() {
       data: {
         userId: user.id,
         auctionId: auction.id,
-        btcAmount: user.pledgeAmount,
+        // store sats (int) instead of BTC float
+        satAmount: Math.round(user.pledgeAmount * 1e8),
         depositAddress: 'generated-deposit-address', // In a real scenario, this would be generated
         status: 'confirmed',
         verified: true,

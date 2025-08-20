@@ -124,7 +124,7 @@ export const broadcastAuctionUpdate = async (auctionId: string) => {
 // Create a new auction
 export const createAuction = async (req: Request, res: Response) => {
   try {
-    const { totalTokens, ceilingMarketCap, startTime, endTime, minPledge, maxPledge } = req.body;
+    const { totalTokens, ceilingMarketCap, startTime, endTime, minPledgeSats, maxPledgeSats } = req.body;
     
     if (!totalTokens || !ceilingMarketCap || !startTime || !endTime) {
       return res.status(400).json({ message: 'Missing required auction fields' });
@@ -136,8 +136,9 @@ export const createAuction = async (req: Request, res: Response) => {
         ceilingMarketCap: parseFloat(ceilingMarketCap), // Using ceiling market cap instead of hardCapBTC
         startTime: new Date(startTime),
         endTime: new Date(endTime),
-        minPledge: minPledge ? parseFloat(minPledge) : 0.001,
-        maxPledge: maxPledge ? parseFloat(maxPledge) : 0.5,
+        // sats fields (fallbacks: 0.001 BTC and 0.5 BTC)
+        minPledgeSats: minPledgeSats ? Number(minPledgeSats) : 100_000,
+        maxPledgeSats: maxPledgeSats ? Number(maxPledgeSats) : 50_000_000,
         isActive: true,
         isCompleted: false,
         totalBTCPledged: 0,
@@ -436,14 +437,14 @@ export const getUserAllocation = async (req: Request, res: Response) => {
         }
       },
       _sum: {
-        btcAmount: true
+        satAmount: true
       }
     });
     
-    const totalRaised = totalVerifiedPledges._sum?.btcAmount || 0;
+    const totalRaised = ((totalVerifiedPledges._sum?.satAmount ?? 0) as number) / 1e8;
     
     // Calculate user's total contribution
-    const userTotal = userPledges.reduce((sum, pledge) => sum + pledge.btcAmount, 0);
+    const userTotal = userPledges.reduce((sum, pledge: any) => sum + (((pledge?.satAmount ?? 0) as number) / 1e8), 0);
     
     // Calculate user's refunded amount
     const userRefundedTotal = userRefundedPledges.reduce((sum, pledge) => sum + pledge.btcAmount, 0);
@@ -495,10 +496,10 @@ export const getAuctionStats = async (req: Request, res: Response) => {
     const pledgeStats = await prisma.pledge.aggregate({
       where: { auctionId },
       _count: true,
-      _sum: { btcAmount: true },
-      _avg: { btcAmount: true },
-      _max: { btcAmount: true },
-      _min: { btcAmount: true }
+      _sum: { satAmount: true },
+      _avg: { satAmount: true },
+      _max: { satAmount: true },
+      _min: { satAmount: true }
     });
     
     // Get refunded pledge statistics
@@ -527,13 +528,13 @@ export const getAuctionStats = async (req: Request, res: Response) => {
       ceilingMarketCap: auction.ceilingMarketCap,
       currentMarketCap,
       ceilingReached,
-      totalBTCPledged: pledgeStats._sum?.btcAmount || 0,
+      totalBTCPledged: ((pledgeStats._sum?.satAmount ?? 0) as number) / 1e8,
       percentageFilled: auction.ceilingMarketCap > 0 ? 
         (currentMarketCap / auction.ceilingMarketCap) * 100 : 0,
       pledgeCount: pledgeStats._count,
-      averagePledge: pledgeStats._avg?.btcAmount || 0,
-      largestPledge: pledgeStats._max?.btcAmount || 0,
-      smallestPledge: pledgeStats._min?.btcAmount || 0,
+      averagePledge: ((pledgeStats._avg?.satAmount ?? 0) as number) / 1e8,
+      largestPledge: ((pledgeStats._max?.satAmount ?? 0) as number) / 1e8,
+      smallestPledge: ((pledgeStats._min?.satAmount ?? 0) as number) / 1e8,
       uniqueParticipants: uniqueParticipants.length,
       refundedPledgeCount: refundedPledgeStats._count,
       refundedBTC: refundedPledgeStats._sum?.btcAmount || 0,
@@ -634,8 +635,9 @@ export const resetAuction = async (req: Request, res: Response) => {
         endTime,
         isActive: true,
         isCompleted: false,
-        minPledge: 0.001,
-        maxPledge: 0.5,
+        // min/max in sats
+        minPledgeSats: 100_000,
+        maxPledgeSats: 50_000_000,
       },
     });
 
@@ -645,7 +647,8 @@ export const resetAuction = async (req: Request, res: Response) => {
         data: {
           userId: u.id,
           auctionId: auction.id,
-          btcAmount: u.pledgeAmount,
+          // store pledge in sats per new schema
+          satAmount: Math.round(u.pledgeAmount * 1e8),
           depositAddress: 'generated-deposit-address',
           status: 'confirmed',
           verified: true,

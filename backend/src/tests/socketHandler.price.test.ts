@@ -48,8 +48,8 @@ describe('sendAuctionStatus', () => {
         refundedBTC: 0,
         totalTokens: 100_000_000,
         ceilingMarketCap: 15_000_000,
-        minPledge: 0.001,
-        maxPledge: 0.5,
+        minPledgeSats: 100_000,
+        maxPledgeSats: 50_000_000,
       }
     });
 
@@ -103,8 +103,8 @@ describe('sendAuctionStatus', () => {
         refundedBTC: 0,
         totalTokens: 50_000,
         ceilingMarketCap: 15_000_000,
-        minPledge: 0.001,
-        maxPledge: 0.5,
+        minPledgeSats: 100_000,
+        maxPledgeSats: 50_000_000,
       }
     });
 
