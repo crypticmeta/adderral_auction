@@ -1,5 +1,7 @@
-// File: PledgeInterface.tsx - Modern pledge UI; disables when BTC price unavailable or wallet not connected
-import React, { useMemo, useState } from 'react';
+// File: PledgeInterface.tsx - Modern pledge UI; disables when BTC price unavailable or wallet not connected. Shows wallet BTC/USD balance.
+import React, { useEffect, useMemo, useState } from 'react';
+import { useWalletBalance } from 'bitcoin-wallet-adapter';
+import { useWebSocket } from '@/hooks/use-websocket';
 
 interface PledgeInterfaceProps {
   minPledge: number;
@@ -21,6 +23,70 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
   const [message, setMessage] = useState<{ type: 'error' | 'success'; title: string; description?: string } | null>(null);
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  const { auctionState } = useWebSocket();
+  const auctionId = auctionState?.id as string | undefined;
+
+  // Backend BTC price
+  const [backendPrice, setBackendPrice] = useState<number | null>(null);
+  const [priceLoading, setPriceLoading] = useState(false);
+  const fetchBackendPrice = () => {
+    let cancelled = false;
+    (async () => {
+      if (!auctionId) return;
+      try {
+        setPriceLoading(true);
+        const res = await fetch(`${apiUrl}/api/pledges/max-pledge/${auctionId}`);
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null) as { currentBTCPrice?: number } | null;
+        if (!cancelled) {
+          const p = typeof data?.currentBTCPrice === 'number' ? data.currentBTCPrice : null;
+          setBackendPrice(p);
+        }
+      } catch (_) {
+        // noop
+      } finally {
+        if (!cancelled) setPriceLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  };
+
+  useEffect(() => {
+    const cleanup = fetchBackendPrice();
+    return cleanup;
+  }, [auctionId, apiUrl]);
+
+  // Wallet balance (BTC) and price (USD per BTC)
+  const {
+    balance,
+    btcPrice,
+    isLoading,
+    fetchBalance,
+    refreshPrice,
+    formatBalance,
+    convertToUSD,
+  } = useWalletBalance();
+
+  const confirmedBtc = useMemo(() => {
+    const v = typeof balance?.confirmed === 'number' ? balance.confirmed : 0;
+    return Number.isFinite(v) ? v : 0;
+  }, [balance?.confirmed]);
+
+  const priceUsd = useMemo(() => {
+    // Prefer backend price
+    if (typeof backendPrice === 'number' && Number.isFinite(backendPrice)) return backendPrice;
+    const p = typeof btcPrice === 'number' ? btcPrice : 0;
+    return Number.isFinite(p) ? p : 0;
+  }, [btcPrice, backendPrice]);
+
+  const usdBalance = useMemo(() => {
+    // Prefer backend conversion first
+    if (priceUsd > 0) return confirmedBtc * priceUsd;
+    if (typeof balance?.usd === 'number' && Number.isFinite(balance.usd)) return balance.usd;
+    const conv = typeof convertToUSD === 'function' ? convertToUSD(confirmedBtc) : null;
+    if (typeof conv === 'number' && Number.isFinite(conv)) return conv;
+    return null;
+  }, [balance?.usd, convertToUSD, confirmedBtc, priceUsd]);
 
   const estimatedTokens = useMemo(() => {
     if (!pledgeAmount) return 0;
@@ -31,6 +97,13 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
     const btcUsd = 0; // unknown here; estimation relies on server-side. Keep 0 if unknown.
     return Math.max(0, Math.floor((btcUsd * amt) / currentPrice));
   }, [pledgeAmount, currentPrice]);
+
+  const exceedsBalance = useMemo(() => {
+    const amt = parseFloat(pledgeAmount || '');
+    if (!isWalletConnected) return false; // don't show error when not connected
+    if (!pledgeAmount || isNaN(amt)) return false;
+    return amt > confirmedBtc;
+  }, [pledgeAmount, confirmedBtc, isWalletConnected]);
 
   const handlePledge = async () => {
     setMessage(null);
@@ -75,6 +148,7 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
   };
 
   const disabled = !isWalletConnected || isPending || !pledgeAmount;
+  const isDisabled = disabled || exceedsBalance;
 
   return (
     <div className="glass-card p-8 rounded-3xl">
@@ -102,6 +176,34 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
           </div>
         </div>
       </div>
+      {/* Wallet Balance */}
+      {isWalletConnected && (
+        <div className="bg-dark-800/50 p-4 rounded-xl mb-6 border border-gray-700">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm">Your Balance</p>
+              <p className="text-cyan-400 font-semibold">
+                {isLoading ? 'Loading…' : (formatBalance ? formatBalance(confirmedBtc) : `${confirmedBtc} BTC`)}
+                <span className="text-gray-400 text-xs ml-2">
+                  {isWalletConnected
+                    ? (usdBalance !== null
+                        ? `(~$${usdBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })})`
+                        : (priceLoading ? 'Fetching USD price…' : 'USD price unavailable'))
+                    : ''}
+                </span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => { try { await fetchBalance(); await refreshPrice(); fetchBackendPrice(); } catch (_) { /* noop */ } }}
+              className="text-xs px-3 py-1 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 disabled:opacity-50"
+              disabled={!!isLoading}
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Input */}
       <div className="mb-6">
@@ -120,6 +222,9 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
           />
           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">BTC</span>
         </div>
+        {exceedsBalance && (
+          <p className="mt-2 text-sm text-red-300">Amount exceeds your confirmed wallet balance.</p>
+        )}
       </div>
 
       {/* Message */}
@@ -145,7 +250,7 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
       {/* Submit */}
       <button
         onClick={handlePledge}
-        disabled={disabled}
+        disabled={isDisabled}
         data-testid="button-pledge"
         className="w-full bg-gradient-to-r from-adderrels-500 to-adderrels-600 hover:from-adderrels-600 hover:to-adderrels-700 py-4 rounded-xl font-bold text-lg transition-all duration-300 transform hover:scale-105 animate-glow flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
       >

@@ -1,5 +1,6 @@
 // Container component that combines PledgeInterface and PledgeQueue
 import React, { useState, useEffect } from 'react';
+import { useWalletAddress } from 'bitcoin-wallet-adapter';
 import PledgeQueue from './PledgeQueue';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { AuctionState } from '@/types/auction';
@@ -14,6 +15,7 @@ const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, wa
   const [activeTab, setActiveTab] = useState<'form' | 'queue'>('form');
   const { auctionState } = useWebSocket();
   const [auctionId, setAuctionId] = useState<string>('');
+  const wallet = useWalletAddress();
 
   // Set auction ID when auction status changes
   useEffect(() => {
@@ -30,6 +32,11 @@ const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, wa
   const currentPrice = state?.currentPrice ?? 0;
   const priceError = Boolean(state?.priceError);
   const isAuctionActive = Boolean(state?.isActive);
+
+  // Prefer adapter connection over upstream prop
+  const adapterConnected = wallet?.connected ?? false;
+  const finalIsWalletConnected = adapterConnected; // reflect true when wallet is actually connected
+  const finalAddress = wallet?.cardinal_address || walletAddress || '';
 
   return (
     <div className="glass-card p-6 rounded-3xl">
@@ -69,8 +76,8 @@ const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, wa
             minPledge={Number(minPledge ?? 0)}
             maxPledge={Number(maxPledge ?? 0)}
             currentPrice={Number(currentPrice ?? 0)}
-            isWalletConnected={isWalletConnected && !priceError && isAuctionActive}
-            walletAddress={walletAddress}
+            isWalletConnected={finalIsWalletConnected}
+            walletAddress={finalAddress}
           />
         ) : (
           auctionId ? <PledgeQueue auctionId={auctionId} /> : (

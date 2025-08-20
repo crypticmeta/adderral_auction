@@ -9,10 +9,13 @@ import PledgeContainer from '@/components/PledgeContainer';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { ConnectMultiButton } from 'bitcoin-wallet-adapter';
 import http from '@/lib/http';
+import { useWalletAddress } from 'bitcoin-wallet-adapter';
 
 export default function Home() {
-  const [isWalletConnected, setIsWalletConnected] = useState(false);
-  const [walletAddress, setWalletAddress] = useState('');
+  // Derive wallet connection from adapter (no localStorage)
+  const wallet = useWalletAddress();
+  const isWalletConnected = wallet?.connected ?? false;
+  const walletAddress = wallet?.cardinal_address ?? '';
   const [isAdmin, setIsAdmin] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [resetMessage, setResetMessage] = useState('');
@@ -20,19 +23,7 @@ export default function Home() {
   // Use our WebSocket hook for auction data
   const { auctionState, isConnected, error } = useWebSocket();
 
-  // Load wallet connection state from localStorage on component mount
-  useEffect(() => {
-    // Check if running in browser environment
-    if (typeof window !== 'undefined') {
-      const storedWalletConnected = localStorage.getItem('walletConnected') === 'true';
-      const storedWalletAddress = localStorage.getItem('walletAddress') || '';
-
-      if (storedWalletConnected && storedWalletAddress) {
-        setIsWalletConnected(true);
-        setWalletAddress(storedWalletAddress);
-      }
-    }
-  }, [])
+  // Note: Wallet connection is managed by the adapter; no localStorage fallbacks
 
   // In dev mode, show reset button for any connected wallet
   useEffect(() => {

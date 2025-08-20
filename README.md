@@ -5,6 +5,9 @@
 # Adderrels Auction Platform
 
 ## Recent Updates
+- **Pledge UI: Wallet Balance Display**
+  - `frontend/src/components/PledgeInterface.tsx` now shows connected wallet balance in BTC and approx USD using `useWalletBalance()` from `bitcoin-wallet-adapter`.
+  - Added null checks, manual refresh, and disables pledging when input exceeds confirmed balance.
 - **Removed Demo/Mock Code (Frontend)**
   - Eliminated mock verification flow from `frontend/src/components/PledgeForm.tsx`.
   - Users now paste a real on-chain txid to verify pledges; no placeholders.
