@@ -8,9 +8,11 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - WebSocket: emits `pledge_verified` on confirmation via `broadcastPledgeVerified()`.
 
  - **Frontend UI Improvements**:
-   - Set app favicon to `/public/adderrel.png` via Next.js metadata in `frontend/src/app/layout.tsx` (will switch after asset rename)
-   - Configured `WalletProvider` to accept and pass `customAuthOptions` to `bitcoin-wallet-adapter` with Adderrels icon
-   - Default network is `mainnet`; override via `customAuthOptions` if needed
+  - Set app favicon to `/public/adderrel.png` via Next.js metadata in `frontend/src/app/layout.tsx` (will switch after asset rename)
+  - Configured `WalletProvider` to accept and pass `customAuthOptions` to `bitcoin-wallet-adapter` with Adderrels icon
+  - Default network is `mainnet`; override via `customAuthOptions` if needed
+  - Auction Progress bar formatting/accessibility improvements (Intl formatting, ARIA valuetext, clamped display percent)
+  - Removed refund display from UI; refunds (if any) are handled manually by the team and not surfaced in the interface
 # Adderrels Auction Platform
 
 ## Recent Updates
@@ -119,7 +121,8 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - After payment, the pledge is created with `txid` and later marked verified when confirmations are detected.
 - **Centralized TypeScript Types**: Implemented a centralized type system
   - All shared types moved to a central `/src/types` directory
-  - Improved type consistency across controllers and services
+  - Added shared UI types for `AuctionProgress` and `TimeRemaining` used by components
+  - Improved type consistency across controllers, services, and frontend components
   - Better TypeScript error detection and prevention
   - Easier maintenance and updates to shared interfaces
 
@@ -128,7 +131,7 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Real-time queue position updates via WebSocket events
   - Refund flag for pledges exceeding auction ceiling
   - Frontend queue display showing pledge status and position
-  - Tabbed interface to switch between pledge form and queue view
+  - Tabbed interface to switch between pledge form and queue
 
 - **Bitcoin Price Service**: Added real-time Bitcoin price fetching with 30-minute cache
   - Fetches BTC price from multiple sources (CoinGecko, Binance, CoinCap)
@@ -379,7 +382,7 @@ Refund mechanism:
 - Usernames are truncated addresses (e.g. `bc1qxyz...9a2f`)
 - Shows estimated ADDERRELS allocation for each pledge based on current totals
 - Realtime updates on `pledge_created`, `pledge:processed`, `pledge:queue:update`
-- Recent Activity merges live queue entries with activity feed and displays a Tx Status badge (In Queue / Processed / Refunded / Confirmed)
+- Recent Activity merges live queue entries with activity feed and displays a Tx Status badge (In Queue / Processed / Confirmed). Refund states are not shown in the UI.
 
 ### Backend
 - Node + TypeScript + Express

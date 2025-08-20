@@ -51,3 +51,29 @@ export interface PledgeData {
     btcAmount: string;
     refundedAmount?: string;
 }
+
+// Shared UI types
+// Time remaining payload used by countdowns
+export interface TimeRemaining {
+  hours: number;
+  minutes: number;
+  seconds: number;
+}
+
+// Props for AuctionProgress component (UI-only; no refund fields)
+export interface AuctionProgressProps {
+  timeRemaining: TimeRemaining;
+  totalRaised: number; // in BTC
+  hardCap?: number; // in BTC
+  // Synchronized timing fields (ms since epoch)
+  endTimeMs?: number;
+  serverTimeMs?: number;
+
+  // Optional auxiliary fields (may be undefined depending on data source)
+  currentMarketCap?: number; // in USD
+  ceilingMarketCap?: number; // in USD
+  ceilingReached?: boolean;
+
+  progressPercentage: number;
+  currentPrice: number; // token price in USD (or unit)
+}

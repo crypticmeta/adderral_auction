@@ -130,7 +130,7 @@ export default function Home() {
     );
   }
 
-  const { config, totalRaised, refundedBTC, currentMarketCap, ceilingMarketCap, ceilingReached, progressPercentage, currentPrice, timeRemaining, endTimeMs, serverTimeMs, recentActivity } = auctionState;
+  const { config, totalRaised, currentMarketCap, ceilingMarketCap, ceilingReached, progressPercentage, currentPrice, timeRemaining, endTimeMs, serverTimeMs, recentActivity } = auctionState;
 
   // Null-safe derived values
   const totalTokensM = config?.totalTokens ? parseInt(config.totalTokens) / 1_000_000 : 0;
@@ -190,7 +190,6 @@ export default function Home() {
               endTimeMs={endTimeMs}
               serverTimeMs={serverTimeMs}
               totalRaised={totalRaised}
-              refundedBTC={refundedBTC}
               currentMarketCap={currentMarketCap}
               ceilingMarketCap={ceilingMarketCap}
               ceilingReached={ceilingReached}
@@ -231,7 +230,7 @@ export default function Home() {
                 If ceiling market cap isn't reached, auction ends after 72 hours.
               </p>
               <p className="text-sm text-gray-400">
-                Final token price determined by total BTC raised (minus refunds) ÷ {totalTokensM}M tokens.
+                Final token price determined by total BTC raised ÷ {totalTokensM}M tokens.
               </p>
             </div>
           </div>
