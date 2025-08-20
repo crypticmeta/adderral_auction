@@ -1,4 +1,8 @@
-// PledgeForm component for submitting BTC pledges
+// PledgeForm
+// Purpose: Allow users to submit BTC pledges and verify them with a real on-chain txid. No mock/demo code.
+// Behavior: Creates pledge via API, shows deposit address and queue, accepts user-provided txid for verification.
+// Styling: TailwindCSS using project theme. Buttons and alerts follow gradient styles.
+// Null-safety: Guards around tokens, auction state, socket events, and optional fields.
 import React, { useState, useEffect } from 'react';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { Socket } from 'socket.io-client';
@@ -12,6 +16,7 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [pledgeData, setPledgeData] = useState<any>(null);
+  const [txid, setTxid] = useState<string>('');
   const [maxPledgeInfo, setMaxPledgeInfo] = useState<{
     minPledge: number;
     maxPledge: number;
@@ -125,38 +130,40 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
     }
   };
 
-  // Mock function to simulate verifying a pledge with a transaction ID
+  // Verify pledge using a real user-provided transaction ID (txid)
   const handleVerifyPledge = async () => {
-    if (!pledgeData) return;
-    
+    if (!pledgeData || !pledgeData.id) return;
+    const trimmed = (txid || '').trim();
+    if (trimmed.length === 0) {
+      setError('Please paste the transaction ID (txid) from your wallet.');
+      return;
+    }
+
     setIsLoading(true);
-    
+
     try {
-      const token = localStorage.getItem('guestToken');
-      
+      const token = typeof window !== 'undefined' ? localStorage.getItem('guestToken') : null;
       if (!token) {
         throw new Error('Authentication token not found');
       }
-      
-      // Generate a mock transaction ID
-      const mockTxid = '0x' + Array(64).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('');
-      
+
       const response = await fetch(`${apiUrl}/api/auction/verify-pledge/${pledgeData.id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ txid: mockTxid })
+        body: JSON.stringify({ txid: trimmed })
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to verify pledge');
       }
-      
+
       const data = await response.json();
       setPledgeData(data);
+      setTxid('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
@@ -212,12 +219,24 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
               </p>
             </div>
           )}
+          <div className="space-y-2">
+            <label htmlFor="txid" className="block text-xs text-amber-300">Transaction ID (txid)</label>
+            <input
+              id="txid"
+              type="text"
+              value={txid}
+              onChange={(e) => setTxid(e.target.value)}
+              placeholder="Paste your on-chain txid"
+              className="w-full px-3 py-2 bg-dark-900/50 border border-yellow-500/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-gray-200 placeholder-gray-500"
+              disabled={isLoading}
+            />
+          </div>
           <button
             onClick={handleVerifyPledge}
-            disabled={isLoading}
+            disabled={isLoading || !pledgeData?.id || (txid.trim().length === 0)}
             className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 text-black py-2 px-4 rounded-lg hover:from-yellow-600 hover:to-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-yellow-500/25"
           >
-            {isLoading ? 'Verifying...' : 'Verify Payment (Mock)'}
+            {isLoading ? 'Verifying...' : 'Verify Payment'}
           </button>
         </div>
       )}

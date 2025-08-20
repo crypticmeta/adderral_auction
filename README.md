@@ -5,6 +5,12 @@
 # Adderrels Auction Platform
 
 ## Recent Updates
+- **Removed Demo/Mock Code (Frontend)**
+  - Eliminated mock verification flow from `frontend/src/components/PledgeForm.tsx`.
+  - Users now paste a real on-chain txid to verify pledges; no placeholders.
+  - Cleaned demo-related comment wording in `frontend/src/components/auction-progress.tsx`.
+  - Ensured null-safety and production-ready UI copy (no demo/preview mentions).
+
 - **Backend Tests: Real Services via Testcontainers (Live HTTP)**
   - Jest runs against real Postgres and Redis containers (ephemeral) using Testcontainers
   - Bitcoin price service tests perform real HTTP calls (no mocks) and assert Redis cache TTLs

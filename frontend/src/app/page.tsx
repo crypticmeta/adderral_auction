@@ -87,7 +87,6 @@ export default function Home() {
           {error ? (
             <>
               <p className="text-red-400 mb-2">Connection issue: {error}</p>
-              <p className="text-gray-400 mb-4">Using demo data for preview</p>
             </>
           ) : (
             <p className="text-gray-400 mb-4">Connecting to auction...</p>
@@ -116,49 +115,6 @@ export default function Home() {
         <div className="absolute inset-0 gradient-bg opacity-95" />
         <div className="absolute inset-0 banner-overlay" />
       </div>
-
-      {/* Header */}
-      <header className="relative z-50 p-6">
-        <nav className="flex items-center justify-between max-w-7xl mx-auto">
-          {/* Logo */}
-          <div className="flex items-center justify-center space-x-4">
-            <div className="w-12 h-12 rounded-full overflow-hidden">
-              <img src="/adderrel.png" alt="Adderrels Token Logo" className="w-full h-full object-contain" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-extrabold">
-                ADDERRELS
-              </h1>
-              <p className="text-sm text-gray-400">by Adderrels</p>
-            </div>
-          </div>
-
-          {/* Admin Reset Button */}
-          {isAdmin && (
-            <button
-              onClick={handleResetAuction}
-              disabled={isResetting}
-              className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-md hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-red-500/25 mr-4"
-            >
-              {isResetting ? 'Resetting...' : 'Reset Auction'}
-            </button>
-          )}
-
-          {/* implement bitcoin wallet adapter Multiwalletbutton component */}
-          <ConnectMultiButton
-            network="mainnet"
-            connectionMessage='Connect your wallet to participate in the auction.'
-            // buttonClassname="w-full bg-primary text-primary-foreground py-2.5 px-4 rounded-md hover:bg-primary/80 focus:outline-none focus:ring-2 focus:ring-ring transition-colors"
-            // modalContainerClass="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-            // modalContentClass="bg-card rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6"
-            supportedWallets={["unisat", "xverse", "leather", "magiceden", "okx"]}
-            onSignatureCapture={(signatureData) => {
-              console.log('Signature captured:', signatureData);
-              // You can use this data for additional verification if needed
-            }}
-          />
-        </nav>
-      </header>
 
       {/* Main Content */}
       <main className="relative z-10 min-h-screen pt-8 pb-16 section-gradient">

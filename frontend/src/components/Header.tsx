@@ -14,7 +14,7 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-white/10 bg-dark-900/70 backdrop-blur">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between">
+        <div className="flex h-24 items-center justify-between">
           {/* Brand */}
           <Link href="/" className="flex items-center gap-3">
             {/* If the image is missing, fallback to text via alt */}

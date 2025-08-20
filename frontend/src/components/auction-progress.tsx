@@ -11,13 +11,13 @@ interface TimeRemaining {
 interface AuctionProgressProps {
   timeRemaining: TimeRemaining;
   totalRaised: number; // in BTC
-  // Optional: hard cap in BTC to mirror demo component API
+  // Optional: hard cap in BTC for raised progress computation
   hardCap?: number;
   // Synchronized timing fields (ms since epoch)
   endTimeMs?: number;
   serverTimeMs?: number;
 
-  // Back-compat fields (may be undefined when using demo-like API)
+  // Optional auxiliary fields (may be undefined depending on data source)
   refundedBTC?: number;
   currentMarketCap?: number; // in USD
   ceilingMarketCap?: number; // in USD
@@ -74,7 +74,7 @@ export function AuctionProgress({
         <CountdownTimer timeRemaining={timeRemaining} endTimeMs={endTimeMs} serverTimeMs={serverTimeMs} />
       </div>
 
-      {/* Progress Bar (demo style prioritized) */}
+      {/* Progress Bar */}
       <div className="mb-6">
         <div className="flex justify-between text-sm mb-2">
           {hasHardCap ? (
