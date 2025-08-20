@@ -212,12 +212,12 @@ adderrels-auction/
    yarn install
    ```
 
-3. Create a `.env.local` file:
+3. Copy the example env file to `.env.local`:
    ```bash
-   touch .env.local
+   cp .env.local.example .env.local
    ```
 
-4. Add the following environment variables to `.env.local`:
+4. Adjust values in `.env.local` as needed (defaults shown in the example):
    ```
    NEXT_PUBLIC_API_URL=http://localhost:5000
    NEXT_PUBLIC_WS_URL=ws://localhost:5000

@@ -33,6 +33,7 @@ export default function Header() {
           {/* Actions */}
           <div className="flex items-center gap-3">
             <ConnectMultiButton
+              icon="/adderrel.png"
               network="mainnet"
               connectionMessage="Connect your wallet to participate in the auction."
               buttonClassname="bg-adderrels-500 text-white hover:bg-adderrels-500/90 transition-colors rounded-md px-3 py-2 text-sm font-medium"
