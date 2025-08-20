@@ -365,6 +365,42 @@ Refund mechanism:
 - Backend: expose 5000 behind ALB with WebSocket + sticky sessions; health checks + autoscale.
 - Run across multiple AZs for resilience.
 
+## Test Data: wallets.json
+
+- Location: `frontend/public/wallets.json` (served at `/wallets.json`)
+- Purpose: Testing-only dataset of publicly known Bitcoin addresses to simulate users in UI flows.
+- Schema: Mirrors backend `User` fields for compatibility: `id`, `cardinal_address`, `ordinal_address`, `cardinal_pubkey`, `ordinal_pubkey`, `wallet`, `network`, `connected`, `createdAt`, plus `label`, `sourceUrl`.
+- Usage (frontend): Fetch and handle nulls safely.
+  - Example: `const res = await fetch('/wallets.json'); const data = await res.json(); const wallets = data?.wallets ?? [];`
+- Sources: Use public donation addresses and exchange cold wallets cited by reputable sources only. Do not include private/personal addresses.
+- Note: Do not use in production.
+
+### Build/update the list
+- Configure source URLs in `frontend/scripts/sources/urls.json` (mainnetUrls/testnetUrls).
+- Build file: from `frontend/` run `yarn wallets:build`.
+- The script fetches pages, extracts likely BTC addresses (bech32/base58), classifies by prefix, dedupes, and writes exactly 100 mainnet + 100 testnet when available.
+
+#### BSON ingestion (MongoDB dumps)
+- The builder can ingest `.bson` files using `bsondump`.
+- Focuses on `sales.bson` for wallet extraction (txes.bson is intentionally ignored by default to avoid heavy parsing). Override with `--bsonFiles`, but `txes.bson` will still be excluded.
+- Example:
+  ```bash
+  yarn wallets:build \
+    --bsonDir="/path/to/mongodb_backup/ordinalnovus" \
+    --bsonFiles=sales.bson
+  ```
+- Requirements: `bsondump` (MongoDB Database Tools) available in PATH.
+
+#### TXIDs output (from sales.bson)
+- During the build, the script also extracts `txid` values from `sales.bson` and writes them to `frontend/public/txids.json`.
+- The extractor collects any 64-hex string, or values under keys matching `/txid|tx_id|transaction_id/i`.
+- Example fetch in frontend:
+  ```ts
+  const res = await fetch('/txids.json');
+  const data = await res.json();
+  const txids: string[] = data?.txids ?? [];
+  ```
+
 ## License
 
 MIT

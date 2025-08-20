@@ -220,3 +220,30 @@ Component: `frontend/src/components/PledgeForm.tsx`
 - Section default: [Manual]
 - [ ] README’s described features are observable in the app
 - [ ] Any new changes are reflected back into `README.md`
+
+## User-Specified Real-World Test Runs
+
+- [Overview] These are focused, end-to-end validations you asked to include. They complement sections above and should be tracked as explicit runs.
+
+### 1) Automated APIs/Services
+- Goal: Validate controllers, services, and integrations via automation.
+- Method: Expand existing Jest suite using Supertest + Testcontainers for Postgres/Redis and live HTTP price fetches. Tag with `@api` to filter in CI.
+- Exit criteria: All API endpoints and service behaviors in “Automated Tests” pass in CI on a clean environment.
+
+### 2) WS-based UI Interaction (Multi-user)
+- Goal: Verify real-time UI across multiple concurrent clients.
+- Recommended method (better than multiple home devices): Playwright multi-context test
+  - Spin up app once; create 2–4 browser contexts (simulated users) subscribing to the same WS.
+  - Script pledges/status updates and assert synchronized UI (progress, queue, badges) without flakiness from LAN variances.
+  - Optional: Run headed for observation; record traces/video.
+- Optional real device check: one laptop + one phone on LAN as a sanity pass after Playwright is green.
+
+### 3) Pledge Flow Using Test Data
+- Goal: Validate full FCFS pledge lifecycle with safe data.
+- Method: Use dev reset/seed to create a fresh 72h auction and test users; perform pledges within limits and near-ceiling to trigger refund paths.
+- Assertions: Queue order preserved; WS events (`pledge_created`, `pledge:processed`, `pledge:queue:update`) fire; UI shows refunded/excess states; totals match.
+
+### 4) Final Test on Testnet — 0.1 BTC in 3 Days
+- Goal: Dress rehearsal on testnet with real wallets.
+- Plan: Configure testnet endpoints/keys; open a 72h auction targeting 0.1 BTC; publicize only to test participants.
+- Success: Auction ends at time or ceiling; aggregates and event logs consistent; no UI/WS regressions; postmortem metrics captured (latency, message rates, error banners, refund accounting).

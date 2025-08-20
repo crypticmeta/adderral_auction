@@ -1,0 +1,9 @@
+{
+  "mainnetUrls": [],
+  "testnetUrls": [
+    "https://en.bitcoin.it/wiki/Testnet",
+    "https://bitcoin.stackexchange.com/questions/tagged/testnet",
+    "https://faucet.mempool.co/",
+    "https://coinfaucet.eu/en/btc-testnet/"
+  ]
+}
