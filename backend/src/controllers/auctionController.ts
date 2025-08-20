@@ -6,7 +6,7 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { Server } from 'socket.io';
-import { AuctionType, MultiWalletData } from '../types';
+import type { AuctionType, MultiWalletData } from '@shared/types';
 import { bitcoinPriceService } from '../services/bitcoinPriceService';
 import { redisClient } from '../config/redis';
 import { addHours } from 'date-fns';

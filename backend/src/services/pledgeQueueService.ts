@@ -5,7 +5,7 @@
 
 import { redisClient } from '../config/redis';
 import { Server } from 'socket.io';
-import { QueuedPledge } from '../types';
+import type { QueuedPledge } from '@shared/types';
 
 export class PledgeQueueService {
   private static instance: PledgeQueueService;

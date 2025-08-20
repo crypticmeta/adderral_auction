@@ -140,7 +140,7 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Frontend verify timers have been removed from `PledgeForm.tsx` and `PledgeInterface.tsx`.
   - After payment, the pledge is created with `txid` and later marked verified when confirmations are detected.
 - **Centralized TypeScript Types**: Implemented a centralized type system
-  - All shared types moved to a central `/src/types` directory
+  - All shared types live in `shared/types/` and are consumed via `@shared/types`
   - Added shared UI types for `AuctionProgress` and `TimeRemaining` used by components
   - Improved type consistency across controllers, services, and frontend components
   - Better TypeScript error detection and prevention
@@ -226,7 +226,7 @@ adderrels-auction/
 │   │   ├── models/    # Data models
 │   │   ├── routes/    # API routes
 │   │   ├── services/  # Services including Bitcoin price fetching
-│   │   ├── types/     # Centralized TypeScript type definitions
+│   │   ├── ...        # (All TypeScript types are consolidated under shared/types)
 │   │   ├── websocket/ # WebSocket handlers
 │   │   └── server.ts  # Main server entry point
 │   └── ...

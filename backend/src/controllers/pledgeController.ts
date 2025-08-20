@@ -10,7 +10,6 @@ import { Server } from 'socket.io';
 import { PledgeQueueService } from '../services/pledgeQueueService';
 import { BitcoinPriceService } from '../services/bitcoinPriceService';
 import { broadcastPledgeCreated, broadcastPledgeVerified } from '../websocket/socketHandler';
-import { PledgeType } from '../types';
 
 // Prisma client provided by singleton
 
