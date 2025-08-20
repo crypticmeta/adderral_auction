@@ -1,7 +1,7 @@
 // Auction progress component showing time remaining and an animated, shimmering progress bar that reacts to live pledges
 import React, { useEffect, useRef, useState } from 'react';
 import { CountdownTimer } from './countdown-timer';
-import { AuctionProgressProps } from '../types/auction';
+import { AuctionProgressProps } from '@shared/types/auction';
 
 export function AuctionProgress({
   timeRemaining,

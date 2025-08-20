@@ -1,3 +1,14 @@
+## Shared Types
+
+- Location: `shared/types/`
+- Path aliases:
+  - Frontend: `@shared/*` → `../shared/*` (configured in `frontend/tsconfig.json`)
+  - Backend: `@shared/*` → `../shared/*` (configured in `backend/tsconfig.json`)
+- Usage: import only types to avoid runtime resolution requirements. Example:
+  ```ts
+  import type { TimeRemaining, AuctionProgressProps } from '@shared/types/auction';
+  ```
+  Type-only imports are erased at build time and are safe in both projects.
 A new background task now verifies pledge txids against mempool.space and marks pledges as verified when confirmed. Configurable via env (see Backend runtime/env notes).
 
 - **Tx Confirmation Service (background)**
@@ -216,6 +227,8 @@ adderrels-auction/
     │   ├── components/ # React components
     │   └── contexts/  # React contexts
     └── ...
+├── shared/
+│   └── types/        # Shared TypeScript types used by both frontend and backend
 ```
 
 ## Prerequisites

@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import io, { Socket } from 'socket.io-client';
-import { AuctionActivity, AuctionState } from '@/types/auction';
+import type { AuctionActivity, AuctionState } from '@shared/types/auction';
 import { useDebugLog } from '@/contexts/DebugLogContext';
 
 interface WebSocketContextType {

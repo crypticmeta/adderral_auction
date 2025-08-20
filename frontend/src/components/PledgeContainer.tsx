@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useWalletAddress } from 'bitcoin-wallet-adapter';
 import PledgeQueue from './PledgeQueue';
 import { useWebSocket } from '@/hooks/use-websocket';
-import { AuctionState } from '@/types/auction';
+import type { AuctionState } from '@shared/types/auction';
 import PledgeInterface from './PledgeInterface';
 
 interface PledgeContainerProps {

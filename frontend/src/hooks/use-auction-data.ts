@@ -1,7 +1,7 @@
 // Hook for fetching and managing auction data
 import { useQuery, useMutation } from '@tanstack/react-query';
 import http from '@/lib/http';
-import { AuctionState, PledgeData } from '@/types/auction';
+import type { AuctionState, PledgeData } from '@shared/types/auction';
 
 // Use relative paths with safe http wrapper to avoid SSRF/credential leakage
 

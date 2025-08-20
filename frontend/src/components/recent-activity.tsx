@@ -3,7 +3,7 @@
 // and estimated ADDERRELS allocations computed from current auction totals.
 // Now also merges items from the live pledge queue and shows a Tx Status badge.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AuctionActivity } from '@/types/auction';
+import type { AuctionActivity } from '@shared/types/auction';
 import { useWebSocket } from '../contexts/WebSocketContext';
 
 interface RecentActivityProps {

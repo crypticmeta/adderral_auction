@@ -1,7 +1,7 @@
 // File: use-websocket.ts - Thin wrapper around WebSocketContext exposing AuctionState for UI
 // Hook for WebSocket using the WebSocketContext
 import { useWebSocket as useSocketIOWebSocket } from '@/contexts/WebSocketContext';
-import { AuctionState } from '@/types/auction';
+import type { AuctionState } from '@shared/types/auction';
 
 /**
  * This hook is a wrapper around the WebSocketContext
