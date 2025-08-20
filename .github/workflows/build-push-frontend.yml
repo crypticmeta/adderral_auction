@@ -6,10 +6,11 @@ name: "Build and Push Frontend Image"
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main , testing ]
     tags: [ 'v*.*.*' ]
     paths:
       - 'frontend/**'
+      - 'shared/**'
       - '.github/workflows/build-push-frontend.yml'
   workflow_dispatch: {}
 
@@ -74,8 +75,8 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: docker/build-push-action@v6
         with:
-          context: ${{ env.CONTEXT_DIR }}
-          file: ${{ env.DOCKERFILE }}
+          context: .
+          file: frontend/Dockerfile
           push: true
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
@@ -90,8 +91,8 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         uses: docker/build-push-action@v6
         with:
-          context: ${{ env.CONTEXT_DIR }}
-          file: ${{ env.DOCKERFILE }}
+          context: .
+          file: frontend/Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}

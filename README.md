@@ -151,6 +151,10 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Real-time queue position updates via WebSocket events
   - Refund flag for pledges exceeding auction ceiling
   - Frontend queue display showing pledge status and position
+
+- **CI/CD Workflows Updated**
+  - Backend and Frontend GitHub Actions now build with repository root context so Docker can access `shared/` during builds.
+  - Workflows trigger on changes under `shared/**` as well as their respective app folders.
   - Tabbed interface to switch between pledge form and queue
 
 - **Bitcoin Price Service**: Added real-time Bitcoin price fetching with 30-minute cache

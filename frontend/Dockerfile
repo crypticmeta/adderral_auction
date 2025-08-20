@@ -14,8 +14,8 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-# Copy manifests first for better caching (context is frontend/)
-COPY package.json yarn.lock ./
+# Copy manifests from frontend (context is repo root in CI)
+COPY frontend/package.json frontend/yarn.lock ./frontend/
 
 # Increase Yarn network timeout and enable cache to reduce registry pressure
 ARG YARN_NETWORK_TIMEOUT=600000
@@ -24,14 +24,17 @@ RUN yarn config set registry https://registry.yarnpkg.com \
   && yarn config set network-timeout ${YARN_NETWORK_TIMEOUT} \
   && yarn config set prefer-offline true
 
+WORKDIR /app/frontend
 # Install deps (frozen lockfile) with BuildKit cache mounts and higher timeout
 # Note: cache is isolated per-arch and locked to avoid cross-arch tar extraction races
 RUN --mount=type=cache,target=/usr/local/share/.cache/yarn/${TARGETARCH},id=yarn-cache-${TARGETARCH},sharing=locked \
     --mount=type=cache,target=/root/.cache/${TARGETARCH},id=root-cache-${TARGETARCH},sharing=locked \
     yarn install --frozen-lockfile --network-timeout ${YARN_NETWORK_TIMEOUT}
 
-# Copy source
-COPY . .
+WORKDIR /app
+# Copy frontend source and shared types
+COPY frontend ./frontend
+COPY shared ./shared
 
 # Build Next.js app (cache Next compiler artifacts)
 ENV NODE_ENV=production
@@ -43,6 +46,7 @@ ENV NEXT_DISABLE_ESLINT=1
 ENV NEXT_DISABLE_TYPECHECK=1
 
 # Build-time public envs injected via build-args from CI
+WORKDIR /app/frontend
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_WS_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
@@ -63,9 +67,9 @@ RUN groupadd -g 1001 nodejs && useradd -m -u 1001 -g nodejs nextjs
 # - .next/standalone contains server.js and the minimal node_modules needed
 # - .next/static contains static assets required by the server
 # - public contains public assets
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+COPY --from=builder /app/frontend/.next/standalone ./
+COPY --from=builder /app/frontend/.next/static ./.next/static
+COPY --from=builder /app/frontend/public ./public
 
 # Ensure Next.js cache dir is writable by the non-root user
 RUN mkdir -p /app/.next/cache && chown -R 1001:1001 /app

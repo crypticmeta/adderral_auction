@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-# Copy manifests first (context is backend/ in CI)
-COPY package.json yarn.lock ./
+# Copy manifests from backend (context is repo root in CI)
+COPY backend/package.json backend/yarn.lock ./backend/
 
 # Yarn performance settings and cache folder per-arch
 ARG YARN_NETWORK_TIMEOUT=600000
@@ -23,21 +23,27 @@ RUN yarn config set registry https://registry.yarnpkg.com \
   && yarn config set network-timeout ${YARN_NETWORK_TIMEOUT} \
   && yarn config set prefer-offline true
 
+WORKDIR /app/backend
 # Install all deps for build with BuildKit cache mounts
 RUN --mount=type=cache,target=/usr/local/share/.cache/yarn/${TARGETARCH},id=yarn-cache-${TARGETARCH},sharing=locked \
     --mount=type=cache,target=/root/.cache/${TARGETARCH},id=root-cache-${TARGETARCH},sharing=locked \
     yarn install --frozen-lockfile --network-timeout ${YARN_NETWORK_TIMEOUT}
 
+WORKDIR /app
 # Copy Prisma schema early to cache prisma generate
-COPY prisma ./prisma
+COPY backend/prisma ./backend/prisma
 
+WORKDIR /app/backend
 # Generate Prisma client (cached unless prisma/ or deps change)
 RUN npx prisma generate
 
-# Copy source
-COPY . .
+WORKDIR /app
+# Copy backend source and shared types
+COPY backend ./backend
+COPY shared ./shared
 
-# Build TypeScript
+# Build TypeScript (backend tsconfig references ../shared)
+WORKDIR /app/backend
 ENV NODE_OPTIONS=--max_old_space_size=2048
 RUN yarn build
 
@@ -52,11 +58,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy only necessary artifacts
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/src/generated ./dist/generated
+COPY --from=builder /app/backend/dist ./dist
+COPY --from=builder /app/backend/node_modules ./node_modules
+COPY --from=builder /app/backend/package.json ./package.json
+COPY --from=builder /app/backend/prisma ./prisma
+COPY --from=builder /app/backend/src/generated ./dist/generated
 
 # Expose default port (match README/backend config)
 EXPOSE 5000
