@@ -1,4 +1,4 @@
-# bitcoin-wallet-adapter integration (ACORN Frontend)
+# bitcoin-wallet-adapter integration (ADDERREL Frontend)
 
 This document summarizes how we use the `bitcoin-wallet-adapter` package in our Next.js app and the key APIs we rely on.
 

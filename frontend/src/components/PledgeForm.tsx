@@ -172,7 +172,7 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
     <div className="bg-gradient-to-br from-dark-800/50 to-dark-700/50 backdrop-blur-md border border-primary-500/30 rounded-xl p-6 transition-all hover:border-primary-500/60 hover:shadow-glow-md">
       <h2 className="text-2xl font-semibold mb-2 text-white">Make a Pledge</h2>
       <p className="text-gray-300 mb-6">
-        Pledge BTC to secure your ACORN token allocation. First come, first served until ceiling is reached.
+        Pledge BTC to secure your ADDERRELS token allocation. First come, first served until ceiling is reached.
       </p>
       
       {auctionState?.ceilingReached && (

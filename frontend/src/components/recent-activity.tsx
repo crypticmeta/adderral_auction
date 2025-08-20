@@ -1,6 +1,6 @@
 // Component: RecentActivity
 // Shows latest pledges with random avatars (DiceBear), truncated usernames,
-// and estimated ACORN allocations computed from current auction totals.
+// and estimated ADDERRELS allocations computed from current auction totals.
 // Now also merges items from the live pledge queue and shows a Tx Status badge.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AuctionActivity } from '@/types/auction';
@@ -231,7 +231,7 @@ export function RecentActivity({ activities = [], isConnected = false }: RecentA
                                                 return activity?.estimatedTokens ? Number(activity.estimatedTokens).toLocaleString() : '0';
                                             }
                                             return Number(est).toLocaleString(undefined, { maximumFractionDigits: 2 });
-                                        })()} ACORN*
+                                        })()} ADDERRELS*
                                         {activity?.isRefunded && (
                                             <span className="ml-1 text-xs text-amber-400">(refunded)</span>
                                         )}

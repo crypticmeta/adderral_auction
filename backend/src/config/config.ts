@@ -9,16 +9,16 @@ dotenv.config();
 
 export default {
   port: process.env.PORT || 5000,
-  jwtSecret: process.env.JWT_SECRET || 'acorn_auction_secret_key',
+  jwtSecret: process.env.JWT_SECRET || 'adderrels_auction_secret_key',
   clientUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
-  socketIoSecret: process.env.SOCKET_IO_SECRET || 'acorn_auction_socket_io_secret',
+  socketIoSecret: process.env.SOCKET_IO_SECRET || 'adderrels_auction_socket_io_secret',
   rateLimit: parseInt(process.env.RATE_LIMIT_REQUESTS_PER_MINUTE || '60'),
   nodeEnv: process.env.NODE_ENV || 'development',
   database: {
     url: process.env.DATABASE_URL,
     host: process.env.POSTGRES_HOST || 'localhost',
     port: parseInt(process.env.POSTGRES_PORT || '5432'),
-    name: process.env.POSTGRES_DB || 'acorn_auction',
+    name: process.env.POSTGRES_DB || 'adderrels_auction',
     user: process.env.POSTGRES_USER || 'postgres',
     password: process.env.POSTGRES_PASSWORD || 'password'
   },

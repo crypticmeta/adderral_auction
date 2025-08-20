@@ -16,7 +16,7 @@ export function AuctionStats({ totalTokens, ceilingMarketCap, currentMarketCap, 
     return (
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-12">
             {/* Raised so far */}
-            <div className="glass-card p-6 pb-7 rounded-2xl text-center transform hover:scale-105 transition-all duration-300 border border-acorn-500/30 relative z-10 min-h-[180px]">
+            <div className="glass-card p-6 pb-7 rounded-2xl text-center transform hover:scale-105 transition-all duration-300 border border-adderrels-500/30 relative z-10 min-h-[180px]">
                 <div className="w-12 h-12 mx-auto mb-4  bg-orange-500 rounded-full flex items-center justify-center">
                     <span className="text-xl font-bold">₿</span>
                 </div>
@@ -28,8 +28,8 @@ export function AuctionStats({ totalTokens, ceilingMarketCap, currentMarketCap, 
                         ${currM.toFixed(2)}M
                     </div>
                 </div>
-                <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs bg-acorn-500/10 border border-acorn-500/30">
-                    <span className="h-2 w-2 rounded-full bg-acorn-500 mr-1.5 animate-pulse" />
+                <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs bg-adderrels-500/10 border border-adderrels-500/30">
+                    <span className="h-2 w-2 rounded-full bg-adderrels-500 mr-1.5 animate-pulse" />
                     <span>{pct.toFixed(1)}% of ceiling</span>
                 </div>
                 <p className="text-gray-400 mt-2">Raised so far</p>
@@ -38,7 +38,7 @@ export function AuctionStats({ totalTokens, ceilingMarketCap, currentMarketCap, 
             {/* Total Tokens */}
             <div className="glass-card p-6 rounded-2xl text-center transform hover:scale-105 transition-all duration-300">
                 <div className="w-12 h-12 mx-auto mb-4 rounded-full overflow-hidden">
-                    <img src="/acorn.png" alt="Tokens" className="w-full h-full object-contain" />
+                    <img src="/adderrel.png" alt="Tokens" className="w-full h-full object-contain" />
                 </div>
                 <h3 className="text-2xl font-bold number-glow" data-testid="text-total-tokens">
                     {totalTokens ?? '0'}M

@@ -17,12 +17,12 @@ interface WalletProviderProps {
 }
 
 export const WalletProvider: React.FC<WalletProviderProps> = ({ children, customAuthOptions }) => {
-  // Defaults with acorn icon; allow overrides via props
+  // Defaults with existing icon path; allow overrides via props
   const defaults = {
     network: 'mainnet' as const,
     appDetails: {
-      name: "ACORN Auction",
-      icon: "/acorn.png",
+      name: "Adderrels Auction",
+      icon: "/adderrel.png",
     },
   } as const;
 

@@ -253,7 +253,7 @@ export const connectWallet = async (req: Request, res: Response) => {
     }
     
     // Verify wallet ownership (in a real implementation, this would verify the signature)
-    const message = 'Verify wallet ownership for Acorn Auction';
+    const message = 'Verify wallet ownership for Adderrels Auction';
     const isWalletVerified = await bitcoinWalletService.verifyWalletOwnership(
       btcAddress,
       signature || '',
@@ -306,7 +306,7 @@ export const connectMultiWallet = async (req: Request, res: Response) => {
     }
     
     // Verify wallet ownership
-    const message = 'Verify multi-wallet ownership for Acorn Auction';
+    const message = 'Verify multi-wallet ownership for Adderrels Auction';
     const isWalletVerified = await bitcoinWalletService.verifyWalletOwnership(
       btcAddress,
       signature || '',

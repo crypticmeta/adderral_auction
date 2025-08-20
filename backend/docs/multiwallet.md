@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the multiwallet functionality implemented in the Acorn Auction platform. The multiwallet feature allows users to connect both standard Bitcoin addresses and Taproot addresses to their accounts, enabling more flexible transaction options.
+This document describes the multiwallet functionality implemented in the Adderrel Auction platform. The multiwallet feature allows users to connect both standard Bitcoin addresses and Taproot addresses to their accounts, enabling more flexible transaction options.
 
 ## Backend Implementation
 

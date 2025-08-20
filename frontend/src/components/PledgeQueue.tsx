@@ -2,7 +2,7 @@
 // Component: PledgeQueue
 // Shows recent pledge activity with user avatars (random via DiceBear),
 // truncated usernames from addresses, real-time queue updates, and
-// estimated ACORN allocations per pledge based on current auction totals.
+// estimated ADDERRELS allocations per pledge based on current auction totals.
 import React, { useState, useEffect } from 'react';
 import { useWebSocket } from '../contexts/WebSocketContext';
 
@@ -322,7 +322,7 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
                       <span className="font-medium text-gray-200">{formatNumber(pledge.btcAmount)} BTC</span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      <span className="text-gray-300">{formatNumber(estimateAllocation(pledge.btcAmount) ?? null, 2)} ACORN</span>
+                      <span className="text-gray-300">{formatNumber(estimateAllocation(pledge.btcAmount) ?? null, 2)} ADDERRELS</span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       {pledge.processed ? (

@@ -82,7 +82,7 @@ export default function Home() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900">
         <div className="text-center">
-          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-acorn-400 to-acorn-600 bg-clip-text text-transparent">ACORN FCFS Auction</h1>
+          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-adderrels-400 to-adderrels-600 bg-clip-text text-transparent">ADDERRELS FCFS Auction</h1>
 
           {error ? (
             <>
@@ -93,7 +93,7 @@ export default function Home() {
             <p className="text-gray-400 mb-4">Connecting to auction...</p>
           )}
 
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-acorn-500 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-adderrels-500 mx-auto"></div>
         </div>
       </div>
     );
@@ -123,11 +123,11 @@ export default function Home() {
           {/* Logo */}
           <div className="flex items-center justify-center space-x-4">
             <div className="w-12 h-12 rounded-full overflow-hidden">
-              <img src="/acorn.png" alt="ACORN Token Logo" className="w-full h-full object-contain" />
+              <img src="/adderrel.png" alt="Adderrels Token Logo" className="w-full h-full object-contain" />
             </div>
             <div>
               <h1 className="text-2xl font-extrabold">
-                ACORN
+                ADDERRELS
               </h1>
               <p className="text-sm text-gray-400">by Adderrels</p>
             </div>
@@ -176,13 +176,13 @@ export default function Home() {
           {/* Hero Section */}
           <div className="text-center mb-12 animate-float">
             <h1 className="text-5xl md:text-7xl font-black mb-4">
-              <span className="bg-gradient-to-r from-white via-acorn-400 to-acorn-600 bg-clip-text text-transparent">
-                ACORN
+              <span className="bg-gradient-to-r from-white via-adderrels-400 to-adderrels-600 bg-clip-text text-transparent">
+                ADDERRELS
               </span>
             </h1>
             <h2 className="text-2xl md:text-3xl font-bold text-gray-300 mb-2">First Come, First Served Auction</h2>
             <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-              Join the ACORN token FCFS auction. {totalTokensM}M tokens available with a ceiling market cap of $15M.
+              Join the ADDERRELS token FCFS auction. {totalTokensM}M tokens available with a ceiling market cap of $15M.
             </p>
           </div>
 
@@ -265,11 +265,11 @@ export default function Home() {
           <div className="glass-card bg-dark-900/70 backdrop-blur border border-white/10 rounded-t-2xl px-6 py-6">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 bg-gradient-to-r from-acorn-500 to-acorn-600 rounded-full p-1.5 overflow-hidden">
-                  <img src="/acorn.png" alt="ACORN" className="w-full h-full object-contain" />
+                <div className="w-9 h-9 bg-gradient-to-r from-adderrels-500 to-adderrels-600 rounded-full p-1.5 overflow-hidden">
+                  <img src="/adderrel.png" alt="Adderrels" className="w-full h-full object-contain" />
                 </div>
-                <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-acorn-400 to-acorn-600 bg-clip-text text-transparent">
-                  ACORN by Adderrels
+                <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-adderrels-400 to-adderrels-600 bg-clip-text text-transparent">
+                  ADDERRELS by Adderrels
                 </span>
               </div>
 

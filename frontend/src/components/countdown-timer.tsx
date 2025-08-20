@@ -59,7 +59,7 @@ export function CountdownTimer({ timeRemaining, endTimeMs, serverTimeMs }: Count
 
     return (
         <div className="grid grid-cols-3 gap-4 text-center">
-            <div className="bg-gradient-to-b from-dark-800 to-dark-900 p-4 rounded-xl border border-acorn-500/30">
+            <div className="bg-gradient-to-b from-dark-800 to-dark-900 p-4 rounded-xl border border-adderrels-500/30">
                 <div
                     className="text-3xl font-bold number-glow"
                     data-testid="countdown-hours"
@@ -68,7 +68,7 @@ export function CountdownTimer({ timeRemaining, endTimeMs, serverTimeMs }: Count
                 </div>
                 <div className="text-sm text-gray-400">Hours</div>
             </div>
-            <div className="bg-gradient-to-b from-dark-800 to-dark-900 p-4 rounded-xl border border-acorn-500/30">
+            <div className="bg-gradient-to-b from-dark-800 to-dark-900 p-4 rounded-xl border border-adderrels-500/30">
                 <div
                     className="text-3xl font-bold number-glow"
                     data-testid="countdown-minutes"
@@ -77,7 +77,7 @@ export function CountdownTimer({ timeRemaining, endTimeMs, serverTimeMs }: Count
                 </div>
                 <div className="text-sm text-gray-400">Minutes</div>
             </div>
-            <div className="bg-gradient-to-b from-dark-800 to-dark-900 p-4 rounded-xl border border-acorn-500/30">
+            <div className="bg-gradient-to-b from-dark-800 to-dark-900 p-4 rounded-xl border border-adderrels-500/30">
                 <div
                     className="text-3xl font-bold number-glow"
                     data-testid="countdown-seconds"

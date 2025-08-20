@@ -116,7 +116,7 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
             value={pledgeAmount}
             onChange={(e) => setPledgeAmount(e.target.value)}
             data-testid="input-pledge-amount"
-            className="w-full bg-dark-800 border border-gray-600 focus:border-acorn-500 rounded-xl px-4 py-4 pr-16 text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-acorn-500/50 transition-all duration-300"
+            className="w-full bg-dark-800 border border-gray-600 focus:border-adderrels-500 rounded-xl px-4 py-4 pr-16 text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-adderrels-500/50 transition-all duration-300"
           />
           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">BTC</span>
         </div>
@@ -132,11 +132,11 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
 
       {/* Estimation note: depends on server price; hidden when zero */}
       {pledgeAmount && estimatedTokens > 0 && (
-        <div className="bg-gradient-to-r from-acorn-500/10 to-acorn-600/10 border border-acorn-500/30 p-4 rounded-xl mb-6">
-          <p className="text-gray-400 text-sm mb-1">Estimated ACORN Tokens</p>
+        <div className="bg-gradient-to-r from-adderrels-500/10 to-adderrels-600/10 border border-adderrels-500/30 p-4 rounded-xl mb-6">
+          <p className="text-gray-400 text-sm mb-1">Estimated ADDERRELS Tokens</p>
           <div className="flex items-center space-x-2">
-            <p className="text-xl font-bold text-acorn-400" data-testid="text-estimated-tokens">
-              ~{estimatedTokens.toLocaleString()} ACORN
+            <p className="text-xl font-bold text-adderrels-400" data-testid="text-estimated-tokens">
+              ~{estimatedTokens.toLocaleString()} ADDERRELS
             </p>
           </div>
         </div>
@@ -147,7 +147,7 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
         onClick={handlePledge}
         disabled={disabled}
         data-testid="button-pledge"
-        className="w-full bg-gradient-to-r from-acorn-500 to-acorn-600 hover:from-acorn-600 hover:to-acorn-700 py-4 rounded-xl font-bold text-lg transition-all duration-300 transform hover:scale-105 animate-glow flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full bg-gradient-to-r from-adderrels-500 to-adderrels-600 hover:from-adderrels-600 hover:to-adderrels-700 py-4 rounded-xl font-bold text-lg transition-all duration-300 transform hover:scale-105 animate-glow flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isPending ? 'Processing...' : 'Pledge BTC'}
       </button>

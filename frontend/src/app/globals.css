@@ -31,10 +31,17 @@
   --color-tertiary: #a855f7;
   --color-quaternary: #22d3ee;
   
-  /* Acorn theme colors */
-  --acorn-500: #f97316;
-  --acorn-600: #ea580c;
-  --acorn-400: #fb923c;
+  /* Adderrels theme colors (HSL triplets) */
+  --adderrels-50: 24 100% 97%;
+  --adderrels-100: 24 100% 94%;
+  --adderrels-200: 24 95% 86%;
+  --adderrels-300: 24 95% 76%;
+  --adderrels-400: 24 95% 72%; /* #fb923c */
+  --adderrels-500: 25 95% 53%; /* #f97316 */
+  --adderrels-600: 22 89% 45%; /* #ea580c */
+  --adderrels-700: 20 88% 38%; /* #c2410c */
+  --adderrels-800: 20 88% 32%;
+  --adderrels-900: 20 88% 27%;
   --dark-950: #0a0a0a;
   --dark-900: #121212;
   --dark-800: #1e1e1e;
@@ -95,7 +102,7 @@ body {
   color: transparent;
 }
 
-/* Acorn auction specific styles */
+/* Adderrels auction specific styles */
 .number-glow {
   text-shadow: 0 0 10px rgba(249, 115, 22, 0.5);
 }

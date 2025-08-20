@@ -1,8 +1,8 @@
  - **Frontend UI Improvements**:
-   - Set app favicon to `/public/acorn.png` via Next.js metadata in `frontend/src/app/layout.tsx`
-   - Configured `WalletProvider` to accept and pass `customAuthOptions` to `bitcoin-wallet-adapter` with ACORN icon
+   - Set app favicon to `/public/adderrel.png` via Next.js metadata in `frontend/src/app/layout.tsx` (will switch after asset rename)
+   - Configured `WalletProvider` to accept and pass `customAuthOptions` to `bitcoin-wallet-adapter` with Adderrels icon
    - Default network is `mainnet`; override via `customAuthOptions` if needed
-# ACORN Auction Platform
+# Adderrels Auction Platform
 
 ## Recent Updates
 - **Backend Tests: Real Services via Testcontainers (Live HTTP)**
@@ -105,7 +105,7 @@
 - **Bitcoin Wallet Adapter Docs**
   - Added `frontend/docs/bitcoin-wallet-adapter.md` summarizing provider setup, connect component, and hooks
 
-A Next.js application integrated with an Express server implementing WebSocket communication for a First Come, First Served (FCFS) auction system. This application implements the core mechanics of the ACORN auction pledge system, including wallet connection, pledging, real-time auction status updates, and token allocation calculations.
+A Next.js application integrated with an Express server implementing WebSocket communication for a First Come, First Served (FCFS) auction system. This application implements the core mechanics of the Adderrels auction pledge system, including wallet connection, pledging, real-time auction status updates, and token allocation calculations.
 
 ## Features
 
@@ -125,7 +125,7 @@ A Next.js application integrated with an Express server implementing WebSocket c
 ## Project Structure
 
 ```
-acornAuction/
+adderrels-auction/
 ├── backend/           # Express server with WebSocket
 │   ├── src/
 │   │   ├── config/    # Environment configuration
@@ -224,7 +224,7 @@ To enable the WebSocket Debug Window, set `NEXT_PUBLIC_APP_ENV` to `development`
 
 ## Auction Mechanics
 
-The ACORN auction follows a First Come, First Served (FCFS) model with these rules:
+The Adderrels auction follows a First Come, First Served (FCFS) model with these rules:
 
 - Total tokens for sale: 100 million (10% of total supply)
 - Ceiling market cap: $15 million
@@ -273,7 +273,7 @@ Refund mechanism:
 
 - Random avatars per user via DiceBear seeded by their address/userId
 - Usernames are truncated addresses (e.g. `bc1qxyz...9a2f`)
-- Shows estimated ACORN allocation for each pledge based on current totals
+- Shows estimated ADDERRELS allocation for each pledge based on current totals
 - Realtime updates on `pledge_created`, `pledge:processed`, `pledge:queue:update`
 - Recent Activity merges live queue entries with activity feed and displays a Tx Status badge (In Queue / Processed / Refunded / Confirmed)
 

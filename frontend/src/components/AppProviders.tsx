@@ -16,7 +16,7 @@ const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         <WalletProvider
           customAuthOptions={{
             network: 'mainnet',
-            appDetails: { name: 'ACORN Auction', icon: '/acorn.png' },
+            appDetails: { name: 'Adderrels Auction', icon: '/adderrel.png' },
           }}
         >
           {children}

@@ -14,12 +14,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ACORN Auction",
-  description: "Participate in the ACORN token auction and secure your allocation",
+  title: "Adderrels Auction",
+  description: "Participate in the Adderrels token auction and secure your allocation",
   icons: {
-    icon: "/acorn.png",
-    shortcut: "/acorn.png",
-    apple: "/acorn.png",
+    icon: "/adderrel.png",
+    shortcut: "/adderrel.png",
+    apple: "/adderrel.png",
   },
 };
 

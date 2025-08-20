@@ -1,5 +1,5 @@
-<!-- File: TEST_PLAN.md | Purpose: End-to-end test checklist for ACORN Auction Platform -->
-# ACORN Auction Platform — Test Plan
+<!-- File: TEST_PLAN.md | Purpose: End-to-end test checklist for Adderrels Auction Platform -->
+# Adderrels Auction Platform — Test Plan
 
 Use this checklist to verify core flows, real-time behavior, UI consistency, and error handling across frontend and backend. All paths are relative to the repo root.
 
@@ -150,7 +150,7 @@ Component: `frontend/src/components/recent-activity.tsx`
 - [ ] Shows random avatars (DiceBear) seeded by address
 - [ ] Displays truncated usernames from addresses
 - [ ] Merges queue items with activity feed; sorted by time; limited to 10
-- [ ] ACORN allocation shows with asterisk: `ACORN*`
+- [ ] ADDERRELS allocation shows with asterisk: `ADDERRELS*`
 - [ ] Footnote present: `* Estimated; final allocation may vary.`
 - [ ] Tx Status badge for items:
   - [ ] Queue item pending → `In Queue`
@@ -164,7 +164,7 @@ Component: `frontend/src/components/recent-activity.tsx`
 - Section default: [Manual]
 Component: `frontend/src/components/PledgeQueue.tsx`
 - [ ] Random avatars and truncated usernames visible
-- [ ] Estimated ACORN per pledge computed client-side from `auctionState`
+- [ ] Estimated ADDERRELS per pledge computed client-side from `auctionState`
 - [ ] Real-time updates on queue events
 
 ### Pledge Form

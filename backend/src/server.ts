@@ -1,5 +1,5 @@
 /**
- * Main server entry point for the ACORN Auction backend
+ * Main server entry point for the Adderrels Auction backend
  * Handles HTTP requests, WebSocket connections, and database initialization
  */
 

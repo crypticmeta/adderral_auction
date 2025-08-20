@@ -38,8 +38,8 @@ const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, wa
         <button
           onClick={() => setActiveTab('form')}
           className={`px-4 py-3 font-medium text-sm ${activeTab === 'form'
-              ? 'text-acorn-500 border-b-2 border-acorn-500'
-              : 'text-gray-400 hover:text-gray-300'
+            ? 'text-adderrels-500 border-b-2 border-adderrels-500'
+            : 'text-gray-400 hover:text-gray-300'
             }`}
         >
           Make a Pledge
@@ -47,8 +47,8 @@ const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, wa
         <button
           onClick={() => setActiveTab('queue')}
           className={`px-4 py-3 font-medium text-sm ${activeTab === 'queue'
-              ? 'text-acorn-500 border-b-2 border-acorn-500'
-              : 'text-gray-400 hover:text-gray-300'
+            ? 'text-adderrels-500 border-b-2 border-adderrels-500'
+            : 'text-gray-400 hover:text-gray-300'
             }`}
         >
           Pledge Queue

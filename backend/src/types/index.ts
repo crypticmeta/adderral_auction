@@ -1,5 +1,5 @@
 /**
- * Centralized type definitions for the acornAuction backend
+ * Centralized type definitions for the adderrels-auction backend
  */
 
 // Pledge related types
