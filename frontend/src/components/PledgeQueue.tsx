@@ -3,44 +3,26 @@
 // Shows recent pledge activity with user avatars (random via DiceBear),
 // truncated usernames from addresses, real-time queue updates, and
 // estimated ADDERRELS allocations per pledge based on current auction totals.
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useWebSocket } from '../contexts/WebSocketContext';
+import type { PledgeItem, MaxPledgeInfo, QueuePositionEvent } from '../types';
 
 interface PledgeQueueProps {
   auctionId: string;
 }
 
-interface QueuedPledge {
-  id: string;
-  userId: string;
-  btcAmount: number;
-  timestamp: string;
-  position?: number; // legacy client
-  queuePosition?: number; // from API enrich
-  processed: boolean;
-  needsRefund: boolean;
-  user?: {
-    cardinal_address?: string | null;
-    ordinal_address?: string | null;
-  };
-}
-
 const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
-  const [queuedPledges, setQueuedPledges] = useState<QueuedPledge[]>([]);
-  const [userPledges, setUserPledges] = useState<QueuedPledge[]>([]);
+  const [queuedPledges, setQueuedPledges] = useState<PledgeItem[]>([]);
+  const [userPledges, setUserPledges] = useState<PledgeItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [maxPledgeInfo, setMaxPledgeInfo] = useState<{
-    minPledge: number;
-    maxPledge: number;
-    currentBTCPrice: number;
-    minPledgeUSD: number;
-    maxPledgeUSD: number;
-  } | null>(null);
+  const [maxPledgeInfo, setMaxPledgeInfo] = useState<MaxPledgeInfo | null>(null);
   
   const { socket, isAuthenticated, auctionState } = useWebSocket();
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
-  const getUsername = (p: QueuedPledge): string => {
+  const getUsername = (p: PledgeItem): string => {
     const addr = p?.user?.ordinal_address || p?.user?.cardinal_address || p?.userId || '';
     if (!addr) return 'guest';
     const s = String(addr);
@@ -48,7 +30,7 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
     return `${s.slice(0, 6)}...${s.slice(-4)}`;
   };
 
-  const getAvatar = (p: QueuedPledge): string => {
+  const getAvatar = (p: PledgeItem): string => {
     const seed = p?.user?.ordinal_address || p?.user?.cardinal_address || p?.userId || p.id;
     return `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${encodeURIComponent(String(seed))}`;
   };
@@ -68,6 +50,12 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
     return (totalTokens / totalRaisedBTC) * btcAmount;
   };
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_API_URL) {
+      // eslint-disable-next-line no-console
+      console.warn('NEXT_PUBLIC_API_URL not set. Using default http://localhost:5000');
+    }
+  }, []);
   
   // Fetch max pledge info
   useEffect(() => {
@@ -78,78 +66,106 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
           throw new Error('Failed to fetch max pledge info');
         }
         const data = await response.json();
-        setMaxPledgeInfo(data);
+        if (mountedRef.current) setMaxPledgeInfo(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch max pledge info');
+        if (mountedRef.current) setError(err instanceof Error ? err.message : 'Failed to fetch max pledge info');
       }
     };
     
-    fetchMaxPledgeInfo();
+    if (!auctionState?.ceilingReached) {
+      fetchMaxPledgeInfo();
+    }
 
     // Subscribe to real-time events and refetch limits immediately
     if (socket && isAuthenticated) {
       const refetchLimits = () => fetchMaxPledgeInfo();
       socket.on('pledge:queue:update', refetchLimits);
-      socket.on('pledge_created', refetchLimits);
+      socket.on('pledge:created', refetchLimits);
       socket.on('pledge:processed', refetchLimits);
     }
 
     return () => {
       if (socket) {
         socket.off('pledge:queue:update');
-        socket.off('pledge_created');
+        socket.off('pledge:created');
         socket.off('pledge:processed');
       }
     };
-  }, [auctionId, apiUrl, socket, isAuthenticated]);
+  }, [auctionId, apiUrl, socket, isAuthenticated, auctionState?.ceilingReached]);
   
   // Fetch pledges in queue
   useEffect(() => {
+    if (!auctionId) return;
+    // Debounce helper via ref timer
+    const timerRef = { id: 0 as any };
     const fetchPledges = async () => {
       try {
-        setIsLoading(true);
-        const response = await fetch(`${apiUrl}/api/pledges/auction/${auctionId}`);
+        if (mountedRef.current) setIsLoading(true);
+        const response = await fetch(`${apiUrl}/api/auction/${auctionId}/pledges`);
         if (!response.ok) {
           throw new Error('Failed to fetch pledges');
         }
         const data = await response.json();
-        setQueuedPledges(data);
+        // Map backend fields to UI expectations safely
+        const mapped = Array.isArray(data) ? data.map((p: any) => ({
+          id: p?.id,
+          userId: p?.userId ?? '',
+          btcAmount: Number(p?.btcAmount ?? (Number(p?.satAmount ?? 0) / 1e8) ?? 0),
+          timestamp: p?.timestamp ?? '',
+          queuePosition: p?.queuePosition ?? null,
+          processed: Boolean(p?.verified || (p?.status === 'verified') || (Number(p?.confirmations ?? 0) > 0)),
+          needsRefund: Boolean(p?.status === 'refunded' || p?.status === 'pending_refund'),
+          user: p?.user ? {
+            cardinal_address: p.user.cardinal_address ?? null,
+            ordinal_address: p.user.ordinal_address ?? null,
+          } : undefined,
+        })) : [];
+        if (mountedRef.current) setQueuedPledges(mapped);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch pledges');
+        if (mountedRef.current) setError(err instanceof Error ? err.message : 'Failed to fetch pledges');
       } finally {
-        setIsLoading(false);
+        if (mountedRef.current) setIsLoading(false);
       }
     };
     
-    fetchPledges();
+    const debounceFetch = () => {
+      if (timerRef.id) clearTimeout(timerRef.id);
+      timerRef.id = setTimeout(() => { fetchPledges(); }, 300) as any;
+    };
+
+    if (!auctionState?.ceilingReached) {
+      fetchPledges();
+    }
     
     // Set up WebSocket listeners for real-time queue updates
     if (socket && isAuthenticated) {
-      socket.on('pledge_created', (data: any) => {
-        if (data.auctionId === auctionId) {
-          fetchPledges();
-        }
-      });
+      socket.on('pledge:created', (data: any) => { if (data?.auctionId === auctionId) debounceFetch(); });
       
       socket.on('pledge:processed', (data: any) => {
-        if (data.auctionId === auctionId) {
-          fetchPledges();
-        }
+        if (data?.auctionId === auctionId) debounceFetch();
       });
       
-      socket.on('pledge:queue:update', (_data: any) => {
-        fetchPledges();
+      socket.on('pledge:queue:update', (d: any) => { if (!d || d?.auctionId === auctionId) debounceFetch(); });
+
+      // Optional: update live queue position for a pledge
+      socket.on('pledge:queue:position', (payload: QueuePositionEvent) => {
+        const pledgeId = payload?.pledgeId || payload?.id;
+        const pos = payload?.position ?? payload?.queuePosition;
+        if (!pledgeId || pos == null) return;
+        if (!mountedRef.current) return;
+        setQueuedPledges(prev => prev.map(p => p.id === pledgeId ? { ...p, queuePosition: Number(pos) } : p));
       });
     }
     
     return () => {
       if (socket) {
-        socket.off('pledge_created');
+        socket.off('pledge:created');
         socket.off('pledge:processed');
         socket.off('pledge:queue:update');
+        socket.off('pledge:queue:position');
       }
     };
-  }, [auctionId, apiUrl, socket, isAuthenticated]);
+  }, [auctionId, apiUrl, socket, isAuthenticated, auctionState?.ceilingReached]);
   
   // Fetch user pledges
   useEffect(() => {
@@ -276,7 +292,7 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
                   {!pledge.processed && (
                     <div className="text-right">
                       <div className="text-xs text-gray-400">Position</div>
-                      <div className="font-bold">{pledge.position}</div>
+                      <div className="font-bold">{pledge.queuePosition ?? '—'}</div>
                     </div>
                   )}
                 </div>
@@ -317,7 +333,7 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
                         <span className="text-gray-200">{getUsername(pledge)}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm">{pledge.processed ? '—' : (pledge.queuePosition ?? pledge.position ?? '—')}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm">{pledge.processed ? '—' : (pledge.queuePosition ?? '—')}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       <span className="font-medium text-gray-200">{formatNumber(pledge.btcAmount)} BTC</span>
                     </td>

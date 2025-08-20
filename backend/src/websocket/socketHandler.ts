@@ -9,7 +9,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import { Redis } from 'ioredis';
 import { bitcoinPriceService } from '../services/bitcoinPriceService';
 import config from '../config/config';
-import { PrismaClient } from '../generated/prisma';
+import prisma from '../config/prisma';
 
 type PledgeWithUser = {
   id: string;
@@ -38,7 +38,7 @@ type PledgeWithUser = {
   };
 };
 
-const prisma = new PrismaClient();
+// Prisma client provided by singleton
 
 // Socket.IO event types
 export enum SocketEvents {
@@ -57,6 +57,14 @@ export const initializeSocketIO = (server: http.Server): Server => {
   // Create Redis pub/sub clients
   const pubClient = new Redis(config.redis.url);
   const subClient = pubClient.duplicate();
+
+  // Add error handlers to prevent unhandled Redis errors
+  pubClient.on('error', (err) => {
+    console.error('Socket.IO Redis pubClient error:', err);
+  });
+  subClient.on('error', (err) => {
+    console.error('Socket.IO Redis subClient error:', err);
+  });
 
   // Create Socket.IO server
   const io = new Server(server, {

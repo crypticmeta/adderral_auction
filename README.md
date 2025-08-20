@@ -14,6 +14,23 @@ A new background task now verifies pledge txids against mempool.space and marks 
 # Adderrels Auction Platform
 
 ## Recent Updates
+- **API change: Wallet connect**
+  - Removed single-wallet endpoint `POST /api/auction/connect-wallet`.
+  - Standardized on `POST /api/auction/connect-multi-wallet` which now always upserts both addresses and metadata on `User`.
+  - Request body: `{ userId, btcAddress, taprootAddress, publicKey, ordinalPubKey?, wallet?, network?, signature?, message? }`
+  - Response: `{ id, cardinal_address, ordinal_address, cardinal_pubkey, ordinal_pubkey, wallet, network, connected }`
+  - Motivation: Store all information provided by bitcoin-wallet-adapter (cardinal + ordinal).
+ - **API change: Pledges (pay-first flow, single deposit address)**
+  - Get deposit address: `GET /api/pledges/deposit-address` → returns `{ depositAddress, network }` where `depositAddress` is read from env `BTC_DEPOSIT_ADDRESS`.
+  - Create pledge after payment: `POST /api/pledges/` with `{ userId, btcAmount, walletInfo, depositAddress, txid }`.
+  - Fetch pledges by cardinal address for an auction: `GET /api/pledges/auction/:auctionId/cardinal/:cardinalAddress`.
+  - Frontend `PledgeForm.tsx` fetches the deposit address, triggers wallet `payBTC`, and only then creates the pledge with the returned `txid`. No verify or attach endpoints are used. Scheduler confirms on-chain.
+- **Backend stability fixes**
+  - Implemented Prisma client singleton at `backend/src/config/prisma.ts` and refactored all usages to prevent connection pool exhaustion (timeouts P2024).
+  - Added Redis error handlers to Socket.IO Redis adapter clients in `backend/src/websocket/socketHandler.ts` to avoid unhandled connection errors.
+  - Gracefully handle duplicate pledge attempts (Prisma P2002) in `backend/src/controllers/pledgeController.ts#createPledge` by returning HTTP 409 with a helpful message.
+  - Refactored services and controllers to import the singleton: `auctionController.ts`, `scheduledTasks.ts`, `txConfirmationService.ts`, `walletController.ts`, `routes/api/auction/reset.ts`.
+  - Removed unused Prisma imports where applicable (e.g., `pledgeQueueService.ts`).
 - **Auction Min/Max in Sats (breaking change)**
   - Replaced `Auction.minPledge`/`maxPledge` (BTC float) with `minPledgeSats`/`maxPledgeSats` (Int, sats) in `backend/prisma/schema.prisma`.
   - Backend controllers and WebSocket outputs now convert sats -> BTC only for responses.
@@ -36,6 +53,12 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Users now paste a real on-chain txid to verify pledges; no placeholders.
   - Cleaned demo-related comment wording in `frontend/src/components/auction-progress.tsx`.
   - Ensured null-safety and production-ready UI copy (no demo/preview mentions).
+
+- **Pledge pay-first flow (Frontend)**
+  - `PledgeForm.tsx` integrates `usePayBTC()` from `bitcoin-wallet-adapter`.
+  - Flow: fetch deposit address → `payBTC({ address, amount, network })` → obtain `txid` from wallet → `POST /api/pledges` with `txid` and `depositAddress`.
+  - Robust null checks; pledge creation is blocked if wallet does not return a `txid`.
+  - Testing mode remains unchanged and may bypass real payment.
 
 - **Public Stats Page + Endpoint**
   - New Next.js page at `/stats` shows total BTC pledged in the last 24h, 48h, and 72h.
@@ -85,6 +108,15 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Subtle decorative gradient orbs in background
   - Enhanced glass cards and accent glows
   - Layout structure preserved (no markup restructuring)
+- **Wallet identity + guest lifecycle (frontend)**
+  - The app now prefers the connected wallet's cardinal address as the user identifier when creating pledges.
+  - `guestId` is used only as a fallback when no wallet address is available.
+  - On wallet disconnect, `guestId` is cleared automatically so the next connection/pledge session creates a fresh guest.
+  - Testing disconnect (Header's Test mode) also clears `guestId`.
+- **Pledge verification**
+  - Verification is handled by the backend scheduler only; there is no frontend verify/attach call.
+  - Frontend verify timers have been removed from `PledgeForm.tsx` and `PledgeInterface.tsx`.
+  - After payment, the pledge is created with `txid` and later marked verified when confirmations are detected.
 - **Centralized TypeScript Types**: Implemented a centralized type system
   - All shared types moved to a central `/src/types` directory
   - Improved type consistency across controllers and services
@@ -208,11 +240,12 @@ adderrels-auction/
    ```
 
 4. Update the `.env` file with your configuration:
-   ```
-   PORT=5000
-   JWT_SECRET=your_secret_key
-   CLIENT_URL=http://localhost:3000
-   ```
+  ```
+  PORT=5000
+  JWT_SECRET=your_secret_key
+  CLIENT_URL=http://localhost:3000
+  BTC_DEPOSIT_ADDRESS=bc1qxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  ```
 
 5. Start the development server:
    ```bash
@@ -275,6 +308,23 @@ Notes:
 
 To enable the WebSocket Debug Window, set `NEXT_PUBLIC_APP_ENV` to `development` in your `.env.local` file. This will automatically enable the debug window. The debug window will appear as a floating panel on the right side of the screen, showing inbound and outbound WebSocket events. You can copy all logs or clear them for quick debugging.
 
+## Frontend Testing Mode
+
+- Enable by setting `NEXT_PUBLIC_TESTING=true` in `frontend/.env.local` (see `frontend/.env.local.example`).
+- When enabled:
+  - Header shows a "Test Connect" button and hides the normal `ConnectMultiButton`.
+  - After connecting, a "Disconnect" button appears to clear testing state immediately (removes `localStorage` keys and broadcasts `test-wallet-disconnected`).
+  - Clicking "Test Connect" stores a random test wallet in `localStorage` under keys:
+    - `testWallet` (JSON wallet object), `testWalletConnected` = `"true"`.
+  - Home page (`frontend/src/app/page.tsx`) treats this as connected and passes it down to pledge UI.
+  - Pledge UI (`frontend/src/components/PledgeInterface.tsx`):
+    - Shows a demo balance equal to `$100,000` converted to BTC at current BTC/USD price.
+    - Validates input against this demo balance (you cannot pledge more than ~$10k in BTC).
+    - After successful pledge creation, auto-verifies the pledge by posting a random txid after a 60–120s delay.
+    - It prefers a txid from `/public/txids.json` if available; otherwise generates a random 64-hex string.
+- Disable by setting `NEXT_PUBLIC_TESTING=false` or removing the var.
+- Clear testing state by removing `localStorage` keys `testWallet` and `testWalletConnected`.
+
 ## Auction Mechanics
 
 The Adderrels auction follows a First Come, First Served (FCFS) model with these rules:
@@ -296,19 +346,20 @@ Refund mechanism:
 ## API Endpoints
 
 ### Authentication
-- `POST /api/auth/guest-token` - Get a guest JWT token
+- `POST /api/auth/guest-id` - Get a guest ID (used for identifying guest users; no bearer token required)
 
 ### Auction
 - `GET /api/auction/status` - Get auction status (public)
-- `POST /api/auction/reset` - Dev-only full reset: truncates `User`, `Auction`, `Pledge`, `RefundedPledge`, reseeds admin + sample users + a fresh 72h auction, purges Redis `auction:*` caches, and broadcasts the new state
+- `POST /api/auction/reset` - Dev-only auction reset: deletes pledges for the active auction and restarts it with a fresh 72h window; does not touch users
+- `POST /api/auction/reseed` - Dev-only full DB wipe + reseed: truncates `User`, `Auction`, `Pledge` and seeds admin, sample users, one active auction, and sample pledges
 
 ## WebSocket Messages
 
 ### Client to Server
-- `auth` - Authenticate with guest token
+- `auth` - Authenticate with guest ID
 
 ### Server to Client
-- `auction_status` - Periodic auction status updates
+- `auction_status` - Periodic auction status updates (also requested immediately after pledge events on the client)
 - `pledge_created` - New pledge created
 - `pledge_verified` - Pledge verification status
 - `pledge:processed` - Pledge has been processed from the queue
@@ -417,7 +468,7 @@ Refund mechanism:
   ```
 - Runtime envs:
   - Frontend: provide `NEXT_PUBLIC_*` at run.
-  - Backend: `PORT` (default 5000), DB/Redis/JWT envs (see `.env.example`).
+  - Backend: `PORT` (default 5000), DB/Redis/JWT envs (see `.env.example`), and `BTC_DEPOSIT_ADDRESS` for the single global deposit address.
 
 ### Backend runtime requirements and CI/CD fixes
 - **Prisma engines (OpenSSL)**: The backend Docker image installs `openssl` in both build and runtime stages, and Prisma `binaryTargets` include `native`, `debian-openssl-1.1.x`, and `debian-openssl-3.0.x` in `backend/prisma/schema.prisma`. This prevents query engine mismatches on Debian-based images.

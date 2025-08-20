@@ -3,14 +3,14 @@
  * Handles periodic tasks like checking auction time limits and refreshing Bitcoin price
  */
 
-import { PrismaClient } from '../generated/prisma';
+import prisma from '../config/prisma';
 import { bitcoinPriceService } from './bitcoinPriceService';
 import { broadcastAuctionUpdate } from '../controllers/auctionController';
 import { redisClient } from '../config/redis';
 import { txConfirmationService } from './txConfirmationService';
 import type { Server } from 'socket.io';
 
-const prisma = new PrismaClient();
+// Prisma client provided by singleton
 
 let priceInterval: NodeJS.Timeout | null = null;
 let txCheckInterval: NodeJS.Timeout | null = null;

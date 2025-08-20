@@ -14,12 +14,11 @@ import pledgeRoutes from './routes/pledgeRoutes';
 import { initializeSocketIO } from './websocket/socketHandler';
 import { setSocketServer } from './controllers/pledgeController';
 import { setSocketServer as setAuctionSocketServer } from './controllers/auctionController';
-import { PrismaClient } from './generated/prisma';
+import prisma from './config/prisma';
 import { startAuctionTimeCheck, startBitcoinPriceRefresh, startTxConfirmationChecks } from './services/scheduledTasks';
 import './config/redis'; // Initialize Redis connection
 
-// Initialize Prisma client
-const prisma = new PrismaClient();
+// Prisma client is initialized via singleton in config/prisma
 
 // Create Express app and HTTP server
 const app = express();

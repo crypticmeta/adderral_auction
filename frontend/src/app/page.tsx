@@ -12,9 +12,11 @@ import http from '@/lib/http';
 import { useWalletAddress } from 'bitcoin-wallet-adapter';
 
 export default function Home() {
-  // Derive wallet connection from adapter (no localStorage)
+  // Derive wallet connection from adapter or testing localStorage
   const wallet = useWalletAddress();
-  const isWalletConnected = wallet?.connected ?? false;
+  const isTesting = process.env.NEXT_PUBLIC_TESTING === 'true';
+  const [testConnected, setTestConnected] = useState(false);
+  const isWalletConnected = (wallet?.connected ?? false) || (isTesting && testConnected);
   const walletAddress = wallet?.cardinal_address ?? '';
   const [isAdmin, setIsAdmin] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -28,6 +30,45 @@ export default function Home() {
   // In dev mode, show reset button for any connected wallet
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    // Testing mode: read localStorage for test wallet connection
+    if (isTesting) {
+      try {
+        const flag = localStorage.getItem('testWalletConnected');
+        setTestConnected(flag === 'true');
+        console.log('[TestConnect][page] initial testWalletConnected =', flag);
+      } catch (_) {}
+
+      // React to header's test connect event and storage changes
+      const updateFromLocalStorage = () => {
+        try {
+          const flag2 = localStorage.getItem('testWalletConnected');
+          setTestConnected(flag2 === 'true');
+          console.log('[TestConnect][page] updated testWalletConnected =', flag2);
+        } catch (_) {}
+      };
+      const onTestConnect = () => updateFromLocalStorage();
+      const onTestDisconnect = () => {
+        console.log('[TestConnect][page] received test-wallet-disconnected');
+        setTestConnected(false);
+      };
+      const onStorage = (e: StorageEvent) => {
+        if (!e) return;
+        if (e.key === 'testWalletConnected' || e.key === 'testWallet') {
+          console.log('[TestConnect][page] storage event', e.key, '->', e.newValue);
+          updateFromLocalStorage();
+        }
+      };
+      window.addEventListener('test-wallet-connected', onTestConnect as EventListener);
+      window.addEventListener('test-wallet-disconnected', onTestDisconnect as EventListener);
+      window.addEventListener('storage', onStorage);
+      // Cleanup
+      return () => {
+        window.removeEventListener('test-wallet-connected', onTestConnect as EventListener);
+        window.removeEventListener('test-wallet-disconnected', onTestDisconnect as EventListener);
+        window.removeEventListener('storage', onStorage);
+      };
+    }
 
     const checkDevMode = () => {
       // Check if we're in development mode using environment variable or localhost check
@@ -43,7 +84,7 @@ export default function Home() {
     if (isWalletConnected) {
       checkDevMode();
     }
-  }, [isWalletConnected]);
+  }, [isWalletConnected, isTesting]);
 
   const handleResetAuction = async () => {
     if (!window.confirm('Are you sure you want to reset the auction? This will clear all pledges and restart the auction.')) {

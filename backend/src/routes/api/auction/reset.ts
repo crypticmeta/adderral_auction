@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '../../../generated/prisma';
-import jwt from 'jsonwebtoken';
+import prisma from '../../../config/prisma';
+import { addHours } from 'date-fns';
 
 // Extend Express Request type to include user property
 declare global {
@@ -11,7 +11,7 @@ declare global {
   }
 }
 
-const prisma = new PrismaClient();
+// Prisma client provided by singleton
 
 // Middleware to verify admin access
 /**
@@ -28,6 +28,120 @@ export const verifyAdminAccess = async (req: Request, res: Response, next: NextF
   
   // In dev mode, allow the reset without complex authentication
   next();
+};
+
+/**
+ * Full DB wipe + reseed (dev only)
+ * - Truncates Pledge, Auction, User
+ * - Seeds admin, test users, one active auction, and sample pledges
+ */
+export const reseedDb = async (_req: Request, res: Response) => {
+  try {
+    // Truncate all core tables
+    await prisma.$executeRawUnsafe('TRUNCATE TABLE "Pledge" CASCADE');
+    await prisma.$executeRawUnsafe('TRUNCATE TABLE "Auction" CASCADE');
+    await prisma.$executeRawUnsafe('TRUNCATE TABLE "User" CASCADE');
+
+    // Create admin
+    const admin = await prisma.user.create({
+      data: {
+        id: 'admin',
+        ordinal_address: 'bc1pkddf9em6k82spy0ysxdqp5t5puuwdkn6prhcqvhf6vf8tcc686lq4uy0ca',
+        connected: true,
+        network: 'mainnet',
+      },
+    });
+
+    // Test users
+    const testUsers = [
+      {
+        id: 'user-1',
+        ordinal_address: 'bc1p5d7tjqlc2kd9czyx7v4d4hq9qk9y0k5j5q6jz8v7q9q6q6q6q6q6q6q6q6',
+        pledgeAmount: 0.5,
+        cardinal_address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+      },
+      {
+        id: 'user-2',
+        ordinal_address: 'bc1p3q6f8z4h5j7k9l0p2q5w8e9r7t6y4u3i2o1p9o8i7u6y5t4r3e2w1q0',
+        pledgeAmount: 0.25,
+        cardinal_address: 'bc1q9z0t9z5y7x0v9w8z2x3c4v5b6n7m8l9k0j1h2g3f4d5s6f7h8j9k0l1',
+      },
+      {
+        id: 'user-3',
+        ordinal_address: 'bc1p0o9i8u7y6t5r4e3w2q1a9s8d7f6g5h4j3k2l1z0x9c8v7b6n5m4l3k2j1',
+        pledgeAmount: 0.1,
+        cardinal_address: 'bc1q1a2s3d4f5g6h7j8k9l0p1o2i3u4y5t6r7e8w9q0a1s2d3f4g5h6j7k8l9',
+      },
+    ];
+
+    await Promise.all(
+      testUsers.map((u) =>
+        prisma.user.create({
+          data: {
+            id: u.id,
+            ordinal_address: u.ordinal_address,
+            cardinal_address: u.cardinal_address,
+            connected: true,
+            network: 'testnet',
+          },
+        })
+      )
+    );
+
+    // Create new auction 24h
+    const now = new Date();
+    const endTime = addHours(now, 24);
+    const auction = await prisma.auction.create({
+      data: {
+        id: '3551190a-c374-4089-a4b0-35912e65ebdd',
+        totalTokens: 100000000,
+        ceilingMarketCap: 15000000,
+        totalBTCPledged: 0,
+        refundedBTC: 0,
+        startTime: now,
+        endTime,
+        isActive: true,
+        isCompleted: false,
+        minPledgeSats: 100_000,
+        maxPledgeSats: 50_000_000,
+        network: 'MAINNET',
+      },
+    });
+
+    // Sample pledges
+    for (const u of testUsers) {
+      await prisma.pledge.create({
+        data: {
+          userId: u.id,
+          auctionId: auction.id,
+          satAmount: Math.round(u.pledgeAmount * 1e8),
+          depositAddress: 'generated-deposit-address',
+          status: 'confirmed',
+          verified: true,
+        },
+      });
+    }
+
+    const totalPledged = testUsers.reduce((sum, u) => sum + u.pledgeAmount, 0);
+    await prisma.auction.update({
+      where: { id: auction.id },
+      data: { totalBTCPledged: totalPledged },
+    });
+
+    return res.status(200).json({
+      message: 'Database wiped and reseeded successfully',
+      adminId: admin.id,
+      auctionId: auction.id,
+      totalPledged,
+      endTime,
+    });
+  } catch (error) {
+    console.error('Error reseeding DB:', error);
+    return res.status(500).json({
+      message: 'Failed to reseed database',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
 };
 
 /**

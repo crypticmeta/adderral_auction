@@ -4,7 +4,6 @@ import {
   getAuction,
   getAllAuctions,
   updateAuctionStatus,
-  connectWallet,
   connectMultiWallet,
   getAuctionPledges,
   getUserAllocation,
@@ -14,6 +13,7 @@ import {
 } from '../controllers/auctionController';
 import { authenticateJWT } from '../middleware/auth';
 import { verifyAdminAccess } from './api/auction/reset';
+import { reseedDb } from './api/auction/reset';
 
 const router = express.Router();
 
@@ -27,11 +27,11 @@ router.get('/:auctionId/pledges', getAuctionPledges);
 // Protected routes (require authentication)
 router.post('/', authenticateJWT, createAuction);
 router.patch('/:id/status', authenticateJWT, updateAuctionStatus);
-router.post('/connect-wallet', authenticateJWT, connectWallet);
 router.post('/connect-multi-wallet', authenticateJWT, connectMultiWallet);
 router.get('/user/:userId/auction/:auctionId/allocation', authenticateJWT, getUserAllocation);
 
 // Dev-only reset route
 router.post('/reset', verifyAdminAccess, resetAuction);
+router.post('/reseed', verifyAdminAccess, reseedDb);
 
 export default router;

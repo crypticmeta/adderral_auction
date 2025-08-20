@@ -200,6 +200,34 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         setAuctionState(transformToAuctionState(data));
       });
 
+      // Debounced requester to avoid flooding server on rapid events
+      let lastStatusReq = 0;
+      const requestStatus = () => {
+        const now = Date.now();
+        if (now - lastStatusReq < 750) return;
+        lastStatusReq = now;
+        try { sendMessage('get_auction_status', {}); } catch {}
+      };
+
+      // When pledge-related events arrive, refresh auction status so UI totals update immediately
+      newSocket.on('pledge_created', (data) => {
+        debug?.addEntry('in', 'pledge_created', data);
+        requestStatus();
+      });
+      newSocket.on('pledge:queue:update', (data) => {
+        debug?.addEntry('in', 'pledge:queue:update', data);
+        requestStatus();
+      });
+      newSocket.on('pledge:queue:position', (data) => {
+        debug?.addEntry('in', 'pledge:queue:position', data);
+        // position alone may not change totals, but keep UI in sync
+        requestStatus();
+      });
+      newSocket.on('pledge_verified', (data) => {
+        debug?.addEntry('in', 'pledge_verified', data);
+        requestStatus();
+      });
+
       newSocket.on('error', (data) => {
         console.error('Socket.IO error:', data.message);
         setError(data.message);

@@ -5,7 +5,6 @@
 
 import { redisClient } from '../config/redis';
 import { Server } from 'socket.io';
-import { PrismaClient } from '../generated/prisma';
 import { QueuedPledge } from '../types';
 
 export class PledgeQueueService {

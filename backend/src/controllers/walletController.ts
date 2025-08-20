@@ -1,7 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '../generated/prisma';
-
-const prisma = new PrismaClient();
+import prisma from '../config/prisma';
 
 export const connectWallet = async (req: Request, res: Response) => {
   try {
@@ -18,8 +16,26 @@ export const connectWallet = async (req: Request, res: Response) => {
       connected
     } = req.body;
 
-    if (!id || !cardinal_pubkey || !cardinal_address) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    // Validate required fields: user must have both cardinal and ordinal addresses
+    if (!id) {
+      return res.status(400).json({ error: 'Missing required field: id' });
+    }
+
+    if (!cardinal_address || typeof cardinal_address !== 'string' || cardinal_address.trim().length === 0) {
+      return res.status(400).json({ error: 'Missing required field: cardinal_address' });
+    }
+
+    if (!ordinal_address || typeof ordinal_address !== 'string' || ordinal_address.trim().length === 0) {
+      return res.status(400).json({ error: 'Missing required field: ordinal_address' });
+    }
+
+    // Pubkeys should accompany addresses when connecting
+    if (!cardinal_pubkey || typeof cardinal_pubkey !== 'string' || cardinal_pubkey.trim().length === 0) {
+      return res.status(400).json({ error: 'Missing required field: cardinal_pubkey' });
+    }
+
+    if (!ordinal_pubkey || typeof ordinal_pubkey !== 'string' || ordinal_pubkey.trim().length === 0) {
+      return res.status(400).json({ error: 'Missing required field: ordinal_pubkey' });
     }
 
     // Update or create user with wallet details
@@ -34,7 +50,8 @@ export const connectWallet = async (req: Request, res: Response) => {
         network,
         signature,
         message,
-        connected: connected || true,
+        // Preserve explicit false, default to true otherwise
+        connected: (connected ?? true),
       },
       create: {
         id,
@@ -46,7 +63,8 @@ export const connectWallet = async (req: Request, res: Response) => {
         network,
         signature,
         message,
-        connected: connected || true,
+        // Preserve explicit false, default to true otherwise
+        connected: (connected ?? true),
       },
     });
 

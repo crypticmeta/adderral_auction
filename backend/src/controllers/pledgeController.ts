@@ -4,15 +4,15 @@
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient } from '../generated/prisma';
+import prisma from '../config/prisma';
+import config from '../config/config';
 import { Server } from 'socket.io';
 import { PledgeQueueService } from '../services/pledgeQueueService';
 import { BitcoinPriceService } from '../services/bitcoinPriceService';
 import { broadcastPledgeCreated, broadcastPledgeVerified } from '../websocket/socketHandler';
 import { PledgeType } from '../types';
 
-// Initialize Prisma client
-const prisma = new PrismaClient();
+// Prisma client provided by singleton
 
 // Get PledgeQueueService instance
 const pledgeQueueService = PledgeQueueService.getInstance();
@@ -24,6 +24,109 @@ let io: Server | null = null;
 export const setSocketServer = (socketServer: Server) => {
   io = socketServer;
   pledgeQueueService.setSocketServer(socketServer);
+};
+
+/**
+ * Get a deposit address for the active auction (pre-payment step)
+ */
+export const getDepositAddress = async (_req: Request, res: Response) => {
+  try {
+    const auction = await prisma.auction.findFirst({ where: { isActive: true } });
+    if (!auction) {
+      return res.status(404).json({ error: 'No active auction found' });
+    }
+    const depositAddress = (config.depositAddress || '').trim();
+    if (!depositAddress) {
+      return res.status(500).json({ error: 'Deposit address not configured. Set BTC_DEPOSIT_ADDRESS in env.' });
+    }
+    return res.status(200).json({ depositAddress, network: auction.network });
+  } catch (error) {
+    console.error('Error getting deposit address:', error);
+    return res.status(500).json({ error: 'Failed to get deposit address' });
+  }
+};
+
+/**
+ * Attach a transaction ID to an existing pledge (no verification here)
+ * Scheduler will later verify/confirm via mempool.
+ */
+export const attachPledgeTxid = async (req: Request, res: Response) => {
+  try {
+    const { pledgeId, txid } = req.body;
+
+    if (!pledgeId || !txid) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const pledge = await prisma.pledge.findUnique({ where: { id: pledgeId } });
+    if (!pledge) {
+      return res.status(404).json({ error: 'Pledge not found' });
+    }
+
+    const updated = await prisma.pledge.update({
+      where: { id: pledgeId },
+      data: {
+        txid,
+        // mark as pending; scheduler will update these
+        status: 'pending',
+        confirmations: 0,
+        verified: false,
+      },
+      include: { user: true },
+    });
+
+    return res.status(200).json(updated);
+  } catch (error) {
+    console.error('Error attaching txid to pledge:', error);
+    return res.status(500).json({
+      error: 'Failed to attach txid',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+};
+
+/**
+ * Get pledges for a user by cardinal (sender) address within an auction
+ */
+export const getUserPledgesByCardinal = async (req: Request, res: Response) => {
+  try {
+    const cardinalAddress = req?.params?.cardinalAddress ?? '';
+    const auctionId = req?.params?.auctionId ?? '';
+
+    if (!cardinalAddress || typeof cardinalAddress !== 'string') {
+      return res.status(400).json({ error: 'Cardinal address is required' });
+    }
+    if (!auctionId || typeof auctionId !== 'string') {
+      return res.status(400).json({ error: 'Auction ID is required' });
+    }
+
+    const pledges = await prisma.pledge.findMany({
+      where: {
+        auctionId,
+        cardinal_address: cardinalAddress
+      },
+      orderBy: { timestamp: 'asc' }
+    });
+
+    const enrichedPledges = await Promise.all(pledges.map(async (pledge) => {
+      const position = await pledgeQueueService.getPledgePosition(pledge.id);
+      const { processed, needsRefund } = await pledgeQueueService.getPledgeProcessedStatus(pledge.id);
+      return {
+        ...pledge,
+        queuePosition: position,
+        processed,
+        needsRefund
+      };
+    }));
+
+    return res.status(200).json(enrichedPledges);
+  } catch (error) {
+    console.error('Error getting pledges by cardinal address:', error);
+    return res.status(500).json({
+      error: 'Failed to get pledges by cardinal address',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 };
 
 /**
@@ -87,9 +190,9 @@ const calculateMaxPledgeInternal = async (auction: any): Promise<number> => {
  */
 export const createPledge = async (req: Request, res: Response) => {
   try {
-    const { userId, btcAmount, walletInfo, signature } = req.body;
+    const { userId, btcAmount, walletInfo, signature, txid, depositAddress: depositFromBody } = req.body;
 
-    if (!userId || !btcAmount || !walletInfo || !signature) {
+    if (!userId || !btcAmount || !walletInfo || !txid) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -119,9 +222,8 @@ export const createPledge = async (req: Request, res: Response) => {
         error: `Pledge amount must be between ${minBTC} and ${maxPledge} BTC`
       });
     }
-    
-    // Create a deposit address (in a real implementation, this would generate a unique address)
-    const depositAddress = `btc_deposit_${Date.now().toString(16)}`;
+    // Use provided deposit address when available (recommended); fallback to placeholder
+    const depositAddress = depositFromBody ?? `btc_deposit_${Date.now().toString(16)}`;
 
     // Create the pledge in the database
     const pledge = await prisma.pledge.create({
@@ -131,13 +233,18 @@ export const createPledge = async (req: Request, res: Response) => {
         satAmount: Math.round(Number(btcAmount) * 1e8),
         auctionId: auction.id,
         depositAddress,
-        signature,
+        signature: signature ?? null,
         cardinal_address: walletInfo?.address ?? null,
-        ordinal_address: depositAddress,
+        ordinal_address: walletInfo?.ordinalAddress ?? null,
         // inherit network from auction to route mempool queries correctly
         network: auction.network,
         processed: false,
-        needsRefund: false
+        needsRefund: false,
+        // set txid immediately; verification handled by scheduler
+        txid,
+        status: 'pending',
+        confirmations: 0,
+        verified: false
       },
       include: {
         user: true
@@ -173,7 +280,14 @@ export const createPledge = async (req: Request, res: Response) => {
       ...pledge,
       queuePosition
     });
-  } catch (error) {
+  } catch (error: any) {
+    // Handle unique constraint violation gracefully
+    if (error && typeof error === 'object' && error.code === 'P2002') {
+      return res.status(409).json({
+        error: 'Duplicate pledge',
+        details: 'A pledge for this user and auction already exists.'
+      });
+    }
     console.error('Error creating pledge:', error);
     return res.status(500).json({
       error: 'Failed to create pledge',
@@ -185,66 +299,7 @@ export const createPledge = async (req: Request, res: Response) => {
 /**
  * Verify a pledge with a transaction ID
  */
-export const verifyPledge = async (req: Request, res: Response) => {
-  try {
-    const { pledgeId, txid } = req.body;
-
-    if (!pledgeId || !txid) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
-
-    // Find the pledge
-    const pledge = await prisma.pledge.findUnique({
-      where: { id: pledgeId },
-      include: { user: true }
-    });
-
-    if (!pledge) {
-      return res.status(404).json({ error: 'Pledge not found' });
-    }
-
-    if (pledge.verified) {
-      return res.status(400).json({ error: 'Pledge is already verified' });
-    }
-
-    // In a real implementation, we would verify the transaction with a Bitcoin node
-    // For now, we'll just simulate verification
-    const transaction = {
-      txid,
-      fee: 0.0001,
-      confirmations: 1,
-      status: 'confirmed'
-    };
-
-    // Update the pledge with the transaction details
-    const updatedPledge = await prisma.pledge.update({
-      where: { id: pledgeId },
-      data: {
-        txid,
-        fee: transaction.fee,
-        confirmations: transaction.confirmations,
-        status: transaction.status,
-        verified: transaction.status === 'confirmed'
-      },
-      include: {
-        user: true
-      }
-    });
-
-    // Broadcast the pledge verification event
-    if (io) {
-      broadcastPledgeVerified(io, updatedPledge);
-    }
-
-    return res.status(200).json(updatedPledge);
-  } catch (error) {
-    console.error('Error verifying pledge:', error);
-    return res.status(500).json({
-      error: 'Failed to verify pledge',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-};
+ 
 
 /**
  * Get all pledges for an auction

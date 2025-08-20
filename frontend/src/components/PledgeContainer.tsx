@@ -1,4 +1,6 @@
 // Container component that combines PledgeInterface and PledgeQueue
+// Purpose: Orchestrates pledge form and queue; derives wallet connection/address.
+// Testing mode: Reads test wallet from localStorage (testWallet/testWalletConnected) to supply a wallet address when adapter is not connected.
 import React, { useState, useEffect } from 'react';
 import { useWalletAddress } from 'bitcoin-wallet-adapter';
 import PledgeQueue from './PledgeQueue';
@@ -16,6 +18,51 @@ const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, wa
   const { auctionState } = useWebSocket();
   const [auctionId, setAuctionId] = useState<string>('');
   const wallet = useWalletAddress();
+  const isTesting = process.env.NEXT_PUBLIC_TESTING === 'true';
+  const [testingConnected, setTestingConnected] = useState(false);
+  const [testingAddress, setTestingAddress] = useState<string>('');
+
+  // Testing mode: hydrate localStorage test wallet address
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isTesting) return;
+    const pull = () => {
+      try {
+        const flag = localStorage.getItem('testWalletConnected');
+        setTestingConnected(flag === 'true');
+        const raw = localStorage.getItem('testWallet');
+        if (raw) {
+          try {
+            const obj = JSON.parse(raw) as any;
+            const addr = obj?.cardinal || obj?.cardinal_address || '';
+            setTestingAddress(typeof addr === 'string' ? addr : '');
+          } catch {
+            setTestingAddress('');
+          }
+        } else {
+          setTestingAddress('');
+        }
+      } catch {
+        setTestingConnected(false);
+        setTestingAddress('');
+      }
+    };
+    pull();
+
+    const onConnect = () => pull();
+    const onDisconnect = () => { setTestingConnected(false); setTestingAddress(''); };
+    const onStorage = (e: StorageEvent) => {
+      if (!e) return;
+      if (e.key === 'testWallet' || e.key === 'testWalletConnected') pull();
+    };
+    window.addEventListener('test-wallet-connected', onConnect as EventListener);
+    window.addEventListener('test-wallet-disconnected', onDisconnect as EventListener);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('test-wallet-connected', onConnect as EventListener);
+      window.removeEventListener('test-wallet-disconnected', onDisconnect as EventListener);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [isTesting]);
 
   // Set auction ID when auction status changes
   useEffect(() => {
@@ -35,8 +82,18 @@ const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, wa
 
   // Prefer adapter connection over upstream prop
   const adapterConnected = wallet?.connected ?? false;
-  const finalIsWalletConnected = adapterConnected; // reflect true when wallet is actually connected
-  const finalAddress = wallet?.cardinal_address || walletAddress || '';
+  const finalIsWalletConnected = isWalletConnected || adapterConnected || (isTesting && testingConnected);
+  const finalAddress = (wallet?.cardinal_address && wallet?.cardinal_address.length > 0)
+    ? wallet.cardinal_address
+    : (isTesting && testingAddress ? testingAddress : (walletAddress || ''));
+
+  // When wallet disconnects, remove guestId so a fresh guest is created next time
+  useEffect(() => {
+    const disconnected = !adapterConnected && (!isTesting || (isTesting && !testingConnected));
+    if (disconnected) {
+      try { if (typeof window !== 'undefined') localStorage.removeItem('guestId'); } catch { /* noop */ }
+    }
+  }, [adapterConnected, isTesting, testingConnected]);
 
   return (
     <div className="glass-card p-6 rounded-3xl">

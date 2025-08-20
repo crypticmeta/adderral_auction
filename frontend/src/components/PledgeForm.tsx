@@ -1,11 +1,12 @@
 // PledgeForm
 // Purpose: Allow users to submit BTC pledges and verify them with a real on-chain txid. No mock/demo code.
-// Behavior: Creates pledge via API, shows deposit address and queue, accepts user-provided txid for verification.
+// Behavior: Pay-first pledge creation. Fetches a single deposit address, triggers wallet payment, then creates pledge with txid. Verification handled by scheduler.
 // Styling: TailwindCSS using project theme. Buttons and alerts follow gradient styles.
 // Null-safety: Guards around tokens, auction state, socket events, and optional fields.
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useWebSocket } from '../contexts/WebSocketContext';
-import { Socket } from 'socket.io-client';
+import { useWalletAddress, usePayBTC } from 'bitcoin-wallet-adapter';
+import type { WalletInfo, MaxPledgeInfo, DepositAddressResponse, PledgeItem } from '../types';
 
 interface PledgeFormProps {
   isWalletConnected: boolean;
@@ -15,25 +16,36 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
   const [btcAmount, setBtcAmount] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [pledgeData, setPledgeData] = useState<any>(null);
-  const [txid, setTxid] = useState<string>('');
-  const [maxPledgeInfo, setMaxPledgeInfo] = useState<{
-    minPledge: number;
-    maxPledge: number;
-    currentBTCPrice: number;
-    minPledgeUSD: number;
-    maxPledgeUSD: number;
-  } | null>(null);
+  const [pledgeData, setPledgeData] = useState<Partial<PledgeItem> | null>(null);
+  const [maxPledgeInfo, setMaxPledgeInfo] = useState<MaxPledgeInfo | null>(null);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
-  
+
   const { auctionState, isAuthenticated, socket } = useWebSocket();
-  
+  const isTesting = process.env.NEXT_PUBLIC_TESTING === 'true';
+  const walletAddr = useWalletAddress?.() as any;
+  const { payBTC } = usePayBTC?.() as any;
+
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-  
+
+  // Warn once if falling back to localhost
+  useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_API_URL) {
+      // eslint-disable-next-line no-console
+      console.warn('NEXT_PUBLIC_API_URL not set. Using default http://localhost:5000');
+    }
+  }, []);
+
+  // Mounted ref to avoid state updates after unmount
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
+
   // Fetch max pledge info (active auction) and refetch on real-time events
   useEffect(() => {
     const auctionId = auctionState?.id;
     if (!auctionId) return;
+    if (auctionState?.ceilingReached) return; // avoid fetching when ceiling reached
 
     const fetchMaxPledgeInfo = async () => {
       try {
@@ -42,7 +54,7 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
           throw new Error('Failed to fetch max pledge info');
         }
         const data = await response.json();
-        setMaxPledgeInfo(data);
+        if (mountedRef.current) setMaxPledgeInfo(data);
       } catch (err) {
         console.error('Error fetching max pledge info:', err);
       }
@@ -55,6 +67,11 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
       socket.on('pledge:queue:update', refetch);
       socket.on('pledge:created', refetch);
       socket.on('pledge:processed', refetch);
+      const onQueuePos = (payload: any) => {
+        const pos = payload?.position ?? payload?.queuePosition ?? payload?.pos ?? null;
+        if (pos !== null && pos !== undefined && mountedRef.current) setQueuePosition(Number(pos));
+      };
+      socket.on('pledge:queue:position', onQueuePos);
     }
 
     return () => {
@@ -62,116 +79,190 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
         socket.off('pledge:queue:update');
         socket.off('pledge:created');
         socket.off('pledge:processed');
+        socket.off('pledge:queue:position');
       }
     };
   }, [apiUrl, socket, auctionState?.id]);
 
+  // Compute testing-mode demo balance in BTC based on current price
+  const demoMaxBtc = useMemo(() => {
+    const price = maxPledgeInfo?.currentBTCPrice ?? auctionState?.currentPrice ?? 0;
+    if (!isTesting || !price || price <= 0) return 0;
+    const btc = 100_000 / price; // $100,000 USD in BTC
+    return Number.isFinite(btc) ? btc : 0;
+  }, [isTesting, maxPledgeInfo?.currentBTCPrice, auctionState?.currentPrice]);
+
+  // Fetch deposit address with simple retry for transient errors
+  const fetchDepositAddressWithRetry = async (
+    retries = 1,
+    delayMs = 500
+  ): Promise<{ depositAddress: string | null; network?: string | null; }> => {
+    try {
+      const res = await fetch(`${apiUrl}/api/pledges/deposit-address`);
+      if (!res.ok) {
+        throw new Error(`Status ${res.status}`);
+      }
+      const data = await res.json();
+      return { depositAddress: data?.depositAddress ?? null, network: data?.network ?? null };
+    } catch (e) {
+      if (retries > 0) {
+        await new Promise(r => setTimeout(r, delayMs));
+        return fetchDepositAddressWithRetry(retries - 1, delayMs * 2);
+      }
+      throw e;
+    }
+  };
+
   const handlePledge = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    if (isLoading) return; // prevent double submits
+
     if (!isWalletConnected) {
       setError('Please connect your wallet first');
       return;
     }
-    
+
     if (!isAuthenticated) {
       setError('WebSocket authentication required');
       return;
     }
-    
+
+    if (auctionState?.ceilingReached) {
+      setError('Ceiling reached. Pledging is disabled.');
+      return;
+    }
+
     const amount = parseFloat(btcAmount);
     if (isNaN(amount) || amount <= 0) {
       setError('Please enter a valid BTC amount');
       return;
     }
-    
+
     if (maxPledgeInfo && (amount < maxPledgeInfo.minPledge || amount > maxPledgeInfo.maxPledge)) {
       setError(`Pledge amount must be between ${maxPledgeInfo.minPledge} and ${maxPledgeInfo.maxPledge} BTC`);
       return;
     }
-    
-    setIsLoading(true);
-    setError('');
-    setPledgeData(null);
-    
-    try {
-      const token = localStorage.getItem('guestToken');
-      
-      if (!token) {
-        throw new Error('Authentication token not found');
-      }
-      
-      const response = await fetch(`${apiUrl}/api/auction/pledge`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ btcAmount: amount })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create pledge');
-      }
-      
-      const data = await response.json();
-      setPledgeData(data);
-      setBtcAmount('');
-      
-      // Get queue position if available
-      if (data.queuePosition) {
-        setQueuePosition(data.queuePosition);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  // Verify pledge using a real user-provided transaction ID (txid)
-  const handleVerifyPledge = async () => {
-    if (!pledgeData || !pledgeData.id) return;
-    const trimmed = (txid || '').trim();
-    if (trimmed.length === 0) {
-      setError('Please paste the transaction ID (txid) from your wallet.');
+    // Testing-mode: enforce demo balance cap ($10k USD)
+    if (isTesting && demoMaxBtc > 0 && amount > demoMaxBtc) {
+      const maxStr = demoMaxBtc.toFixed(6);
+      setError(`Testing mode: exceeds demo balance. Max allowed ≈ ${maxStr} BTC (=$100,000).`);
       return;
     }
 
     setIsLoading(true);
+    setError('');
+    setPledgeData(null);
 
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('guestToken') : null;
-      if (!token) {
-        throw new Error('Authentication token not found');
+      // Gather identifiers and wallet metadata
+      const guestId = typeof window !== 'undefined' ? localStorage.getItem('guestId') : null;
+      const userId = guestId || undefined;
+
+      // Build wallet info based on mode
+      let walletInfo: WalletInfo | null = null;
+
+      if (isTesting) {
+        const testWalletRaw = typeof window !== 'undefined' ? localStorage.getItem('testWallet') : null;
+        const testWallet = (() => {
+          try { return testWalletRaw ? JSON.parse(testWalletRaw) : null; } catch { return null; }
+        })();
+        walletInfo = testWallet ? {
+          address: testWallet.cardinal || testWallet.cardinal_address || null,
+          ordinalAddress: testWallet.ordinal || testWallet.ordinal_address || null,
+          publicKey: testWallet.cardinalPubkey || testWallet.cardinal_pubkey || null,
+          ordinalPubKey: testWallet.ordinalPubkey || testWallet.ordinal_pubkey || null,
+          wallet: testWallet.wallet || 'TestWallet',
+          network: 'mainnet',
+        } : null;
+        // No signature in testing mode
+      } else {
+        // Use real wallet details from bitcoin-wallet-adapter
+        const address = walletAddr?.cardinal ?? walletAddr?.address ?? null;
+        const ordinalAddress = walletAddr?.ordinal ?? walletAddr?.taproot ?? null;
+        const publicKey = walletAddr?.cardinalPubkey ?? walletAddr?.publicKey ?? null;
+        const ordinalPubKey = walletAddr?.ordinalPubkey ?? walletAddr?.taprootPubkey ?? null;
+        const wallet = walletAddr?.wallet ?? null;
+        const network = walletAddr?.network ?? 'mainnet';
+
+        walletInfo = {
+          address: address ?? null,
+          ordinalAddress: ordinalAddress ?? null,
+          publicKey: publicKey ?? null,
+          ordinalPubKey: ordinalPubKey ?? null,
+          wallet: wallet ?? null,
+          network,
+        };
+
+        // No pre-pledge signature; payment itself serves as proof of control.
       }
 
-      const response = await fetch(`${apiUrl}/api/auction/verify-pledge/${pledgeData.id}`, {
+      if (!userId) {
+        throw new Error('Missing user identity. Please refresh the page to initialize connection.');
+      }
+      if (!walletInfo || !walletInfo.address) {
+        throw new Error('Missing wallet info. Please connect your wallet first.');
+      }
+      // New flow: get deposit address (with retry), pay, obtain txid, then create pledge with txid
+      const addrData: DepositAddressResponse = await fetchDepositAddressWithRetry(1, 500);
+      const depositAddress: string | null = addrData?.depositAddress ?? null;
+      const network: string = walletInfo?.network || walletAddr?.network || addrData?.network || 'mainnet';
+      const sats = Math.round(amount * 1e8);
+      if (!depositAddress || !Number.isFinite(sats) || sats <= 0) {
+        throw new Error('Missing or invalid deposit details.');
+      }
+
+      if (typeof payBTC !== 'function') {
+        throw new Error('Wallet payment function unavailable.');
+      }
+      let txFromPay: string | undefined;
+      try {
+        const payRes = await payBTC({ address: depositAddress, amount: sats, network });
+        txFromPay = payRes?.txid || payRes?.txId || payRes?.transactionId;
+      } catch (payErr: any) {
+        const msg = payErr?.message || payErr?.error || 'Payment failed or was rejected.';
+        throw new Error(msg);
+      }
+      if (!txFromPay) {
+        throw new Error('Payment sent but wallet did not return a txid. Cannot create pledge.');
+      }
+
+      // Optional: re-check ceiling; proceed regardless to allow refund tracking
+      const payload: any = { userId, btcAmount: amount, walletInfo, txid: txFromPay, depositAddress };
+
+      const response = await fetch(`${apiUrl}/api/pledges/`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ txid: trimmed })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to verify pledge');
+        let message = 'Failed to create pledge';
+        try { const errorData = await response.json(); message = errorData?.error || errorData?.message || message; } catch { }
+        throw new Error(message);
       }
 
       const data = await response.json();
-      setPledgeData(data);
-      setTxid('');
+      if (mountedRef.current) {
+        setPledgeData(data);
+        setBtcAmount('');
+      }
+
+      if (data.queuePosition) {
+        if (mountedRef.current) setQueuePosition(data.queuePosition);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      if (mountedRef.current) setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
   };
 
+  // No auto-verify timers or manual verify UI; verification handled by scheduler.
+
   const isAuctionActive = auctionState?.isActive ?? false;
+  const ceilingReached = !!auctionState?.ceilingReached;
   const belowMinCapacity = !!maxPledgeInfo && maxPledgeInfo.maxPledge < maxPledgeInfo.minPledge;
   const zeroCapacity = !!maxPledgeInfo && maxPledgeInfo.maxPledge <= 0;
 
@@ -181,7 +272,13 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
       <p className="text-gray-300 mb-6">
         Pledge BTC to secure your ADDERRELS token allocation. First come, first served until ceiling is reached.
       </p>
-      
+
+      {isTesting && (
+        <div className="bg-blue-600/20 border border-blue-500/30 text-blue-300 px-4 py-3 rounded-lg mb-4 text-sm" role="status" aria-live="polite">
+          Testing mode is enabled. Payments may be simulated and amounts are not sent on-chain.
+        </div>
+      )}
+
       {auctionState?.ceilingReached && (
         <div className="bg-gradient-to-r from-amber-600/20 to-amber-700/20 border border-amber-500/30 text-amber-400 px-4 py-3 rounded-lg mb-4 text-sm">
           <div className="flex items-center">
@@ -192,7 +289,7 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
           </div>
         </div>
       )}
-      
+
       {error && (
         <div className="bg-gradient-to-r from-red-600/20 to-red-700/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg mb-4 text-sm">
           {error}
@@ -204,14 +301,11 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
           Remaining capacity is below the minimum pledge. Pledging is temporarily paused.
         </div>
       )}
-      
+
       {pledgeData && !pledgeData.verified && (
         <div className="bg-gradient-to-r from-yellow-600/20 to-yellow-700/20 border border-yellow-500/30 text-yellow-400 px-4 py-3 rounded-lg mb-4 space-y-3">
-          <h3 className="font-semibold">Payment Required</h3>
-          <p className="text-sm">Please send {pledgeData.btcAmount} BTC to the address below:</p>
-          <div className="bg-dark-900/50 p-3 rounded-lg break-all font-mono text-sm text-gray-300 border border-yellow-500/20">
-            {pledgeData.depositAddress}
-          </div>
+          <h3 className="font-semibold">Payment Recorded</h3>
+          <p className="text-sm">Your payment txid was recorded. Confirmation will be processed automatically.</p>
           {queuePosition !== null && (
             <div className="mt-2 p-2 bg-blue-500/20 border border-blue-400/30 rounded-lg">
               <p className="text-blue-400 text-sm">
@@ -219,33 +313,14 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
               </p>
             </div>
           )}
-          <div className="space-y-2">
-            <label htmlFor="txid" className="block text-xs text-amber-300">Transaction ID (txid)</label>
-            <input
-              id="txid"
-              type="text"
-              value={txid}
-              onChange={(e) => setTxid(e.target.value)}
-              placeholder="Paste your on-chain txid"
-              className="w-full px-3 py-2 bg-dark-900/50 border border-yellow-500/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-gray-200 placeholder-gray-500"
-              disabled={isLoading}
-            />
-          </div>
-          <button
-            onClick={handleVerifyPledge}
-            disabled={isLoading || !pledgeData?.id || (txid.trim().length === 0)}
-            className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 text-black py-2 px-4 rounded-lg hover:from-yellow-600 hover:to-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-yellow-500/25"
-          >
-            {isLoading ? 'Verifying...' : 'Verify Payment'}
-          </button>
         </div>
       )}
-      
+
       {pledgeData && pledgeData.verified && (
         <div className="bg-gradient-to-r from-green-600/20 to-green-700/20 border border-green-500/30 text-green-400 px-4 py-3 rounded-lg mb-4">
           <h3 className="font-semibold mb-2">Pledge Verified!</h3>
           <p className="text-sm">Your pledge of {pledgeData.btcAmount} BTC is confirmed.</p>
-          {pledgeData.refundedAmount > 0 && (
+          {(pledgeData.refundedAmount ?? 0) > 0 && (
             <div className="mt-2 p-2 bg-amber-500/20 border border-amber-400/30 rounded-lg">
               <p className="text-amber-400 text-sm">
                 <span className="font-semibold">Note:</span> {pledgeData.refundedAmount} BTC has been refunded as the ceiling market cap was reached.
@@ -255,7 +330,7 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
           <p className="text-xs mt-2 text-gray-400">TxID: <span className="font-mono break-all">{pledgeData.txid}</span></p>
         </div>
       )}
-      
+
       <form onSubmit={handlePledge} className="space-y-4">
         <div>
           <label htmlFor="btcAmount" className="block text-sm font-medium text-gray-400 mb-2">
@@ -266,14 +341,22 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
               type="number"
               id="btcAmount"
               value={btcAmount}
-              onChange={(e) => setBtcAmount(e.target.value)}
-              step="0.001"
+              onChange={(e) => {
+                const v = e.target.value;
+                // clamp to 8 decimal places
+                const parts = v.split('.');
+                if (parts.length === 2 && parts[1].length > 8) {
+                  parts[1] = parts[1].slice(0, 8);
+                }
+                setBtcAmount(parts.join('.'));
+              }}
+              step="0.00000001"
               min={maxPledgeInfo ? String(maxPledgeInfo.minPledge) : undefined}
               max={maxPledgeInfo ? String(maxPledgeInfo.maxPledge) : undefined}
               className="w-full px-3 py-2 bg-dark-900/50 border border-primary-500/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 pr-12 text-gray-200 placeholder-gray-500"
               placeholder="0.01"
               required
-              disabled={!isWalletConnected || !isAuctionActive || isLoading || (pledgeData && !pledgeData.verified) || belowMinCapacity || zeroCapacity}
+              disabled={!isWalletConnected || !isAuctionActive || ceilingReached || isLoading || (pledgeData && !pledgeData.verified) || belowMinCapacity || zeroCapacity}
             />
             <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-gray-400 text-sm">
               BTC
@@ -284,16 +367,21 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
               Min: {maxPledgeInfo.minPledge} BTC | Max: {maxPledgeInfo.maxPledge} BTC | Current BTC Price: ${maxPledgeInfo.currentBTCPrice.toLocaleString()}
             </p>
           )}
+          {isTesting && demoMaxBtc > 0 && (
+            <p className="text-xs text-amber-400 mt-1.5">
+              Testing mode: Demo balance ≈ {demoMaxBtc.toFixed(6)} BTC (=$100,000)
+            </p>
+          )}
         </div>
-        
+
         <button
           type="submit"
-          disabled={!isWalletConnected || !isAuctionActive || isLoading || !!pledgeData || belowMinCapacity || zeroCapacity}
+          disabled={!isWalletConnected || !isAuctionActive || ceilingReached || isLoading || !!pledgeData || belowMinCapacity || zeroCapacity}
           className="w-full bg-gradient-to-r from-primary-500 to-primary-600 text-white py-2.5 px-4 rounded-lg hover:from-primary-600 hover:to-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-primary-500/25 font-medium"
         >
           {isLoading ? 'Processing...' : 'Pledge Now'}
         </button>
-        
+
         {!isAuctionActive && (
           <p className="text-center text-sm text-red-400 mt-2">
             The auction has ended. No more pledges can be made.
