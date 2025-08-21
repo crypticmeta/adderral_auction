@@ -91,7 +91,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     if (Array.isArray(data.pledges)) {
       recentActivity = data.pledges.slice(-10).map((p: any) => ({
         id: String(p.id ?? `${Math.random()}`),
-        walletAddress: String(p.walletAddress ?? p.userId ?? 'unknown'),
+        walletAddress: String(p.cardinal_address ?? p.user?.cardinal_address ?? p.walletAddress ?? p.userId ?? 'unknown'),
+        cardinal_address: p.cardinal_address ?? p.user?.cardinal_address ?? null,
+        ordinal_address: p.ordinal_address ?? p.user?.ordinal_address ?? null,
         btcAmount: String(p.btcAmount ?? p.amount ?? '0'),
         estimatedTokens: String(p.estimatedTokens ?? '0'),
         timestamp: String(p.timestamp ?? new Date().toISOString()),
@@ -306,10 +308,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   // Request auction status update when authenticated
   useEffect(() => {
     if (isConnected && isAuthenticated) {
-      // Request initial auction status
-      sendMessage('get_auction_status', {});
-
-      // Set up interval to refresh auction status
+      // Set up interval to refresh auction status (server already emits once on connect)
       const statusInterval = setInterval(() => {
         if (isConnected && isAuthenticated) {
           sendMessage('get_auction_status', {});

@@ -244,7 +244,7 @@ export const sendAuctionStatus = async (socket: any) => {
         btcAmount: ((pledge as any).satAmount ?? 0) / 1e8,
         timestamp: pledge.timestamp,
         verified: pledge.verified
-      }))
+      })),
     });
   } catch (error) {
     console.error('Error sending auction status:', error);

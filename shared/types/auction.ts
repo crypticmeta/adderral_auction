@@ -10,6 +10,9 @@ export interface AuctionActivity {
   timestamp: string | Date;
   refundedAmount?: string;
   isRefunded?: boolean;
+  // Optional explicit addresses when available in payloads
+  cardinal_address?: string | null;
+  ordinal_address?: string | null;
 }
 
 // Core auction config sent from backend

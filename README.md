@@ -119,12 +119,18 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - The highlighted stat card showing total BTC raised was removed from `AuctionStats` (auction progress is visible elsewhere).
   - Prop `totalRaisedBTC` has been dropped from `AuctionStats` and its usage removed in `page.tsx`.
   - Files: `frontend/src/components/auction-stats.tsx`, `frontend/src/app/page.tsx`
+- **UI: Recent Activity usernames**
+  - Recent Activity now derives usernames and avatars strictly from the user's `cardinal_address`.
+  - Queue items and the UI's recent activity feed use `cardinal_address` for display; safe fallbacks remain when null.
+  - File: `frontend/src/components/recent-activity.tsx`.
+  - The frontend now derives Recent Activity exclusively from the `pledges` array in `auction_status`.
 - **Footer UI Polish**
   - Glass-card footer with rounded top, blur, and clearer border for readability
   - File: `frontend/src/app/page.tsx`
 - **WS Payload: Auction ID**
   - `auction_status` now includes `id` (active auction ID)
   - Frontend reads `auctionState.id` to route API calls
+  - `auction_status` payload is now simplified: it includes a canonical `pledges` array only. The frontend derives Recent Activity from the last N pledges and uses `cardinal_address` for usernames/avatars.
 - **Queue Limits Fetching**
   - `PledgeQueue` no longer falls back to WS data for min/max limits
   - It uses `/api/pledges/max-pledge/:auctionId` exclusively and shows a subtle error note if unavailable
