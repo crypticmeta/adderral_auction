@@ -1,10 +1,10 @@
-// Common shared types used across frontend and possibly backend
-// Includes wallet metadata, pledge queue items, and minimal state shapes.
+// Common shared types used across frontend and backend
+// Includes wallet metadata, pledge queue items, minimal state shapes, and API DTOs.
 
 export type Network = 'mainnet' | 'testnet' | string;
 
-// Canonical wallet shape returned by bitcoin-wallet-adapter hooks/components
-// Use this across the app for UI/state. For backend payloads, map to WalletInfo when needed.
+// Canonical wallet DTO used across UI/state AND API payloads (no extra mapping layer)
+// Keep this as the single source of truth for wallet fields used in requests/responses.
 export interface WalletDetails {
   cardinal: string; // cardinal (legacy/secp) address
   cardinalPubkey: string; // cardinal pubkey (hex)
@@ -23,11 +23,11 @@ export interface DepositAddressResponse {
 }
 
 export interface MaxPledgeInfo {
-  minPledge: number; // BTC
-  maxPledge: number; // BTC
+  // Canonical amounts in satoshis
+  minPledgeSats?: number; // sats
+  maxPledgeSats?: number; // sats
+  // Price for UI conversions
   currentBTCPrice: number; // USD
-  minPledgeUSD?: number; // USD (optional if not provided by backend)
-  maxPledgeUSD?: number; // USD (optional if not provided by backend)
 }
 
 export interface PledgeUser {
@@ -38,7 +38,8 @@ export interface PledgeUser {
 export interface PledgeItem {
   id: string;
   userId: string;
-  btcAmount: number; // BTC
+  // Canonical amount in satoshis
+  satsAmount: number; // sats
   timestamp?: string | null;
   queuePosition?: number | null;
   processed: boolean;
@@ -48,7 +49,7 @@ export interface PledgeItem {
   verified?: boolean;
   confirmations?: number;
   status?: string | null;
-  refundedAmount?: number; // BTC
+  refundedSats?: number; // sats
 }
 
 export interface QueuePositionEvent {
@@ -65,4 +66,38 @@ export interface AuctionStateMinimal {
   currentPrice?: number;
   totalRaised?: number;
   config?: { totalTokens?: string };
+}
+
+// =========================
+// API DTOs (Requests/Responses)
+// Keep these in sync with backend controllers and frontend callers
+// =========================
+
+// POST /api/pledges
+export interface CreatePledgeRequest {
+  userId: string;
+  // Canonical amount in satoshis
+  satsAmount: number; // sats
+  walletDetails: WalletDetails;
+  signature?: string | null;
+  txid: string; // required (obtained after payment)
+  depositAddress?: string | null; // optional (server can fallback)
+}
+
+export interface CreatePledgeResponse extends PledgeItem {}
+
+// GET /api/pledges/max-pledge/:auctionId
+export interface MaxPledgeResponse extends MaxPledgeInfo {}
+
+// GET /api/auction/:auctionId/pledges
+export type AuctionPledgesResponse = PledgeItem[];
+
+// GET /api/pledges/user/:userId/auction/:auctionId
+export type UserPledgesResponse = PledgeItem[];
+
+// GET /api/pledges/stats
+export interface PledgeStatsResponse {
+  scope: { type: 'active_auction' | 'all'; auctionId?: string };
+  totals: { last24h: number; last48h: number; last72h: number };
+  generatedAt: string;
 }

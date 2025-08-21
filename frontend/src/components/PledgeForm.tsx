@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useWalletAddress, usePayBTC } from 'bitcoin-wallet-adapter';
-import type { MaxPledgeInfo, DepositAddressResponse, PledgeItem, WalletDetails } from '@shared/types/common';
+import type { MaxPledgeInfo, DepositAddressResponse, PledgeItem, WalletDetails, CreatePledgeRequest, CreatePledgeResponse } from '@shared/types/common';
 
 interface PledgeFormProps {
   isWalletConnected: boolean;
@@ -139,9 +139,13 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
       return;
     }
 
-    if (maxPledgeInfo && (amount < maxPledgeInfo.minPledge || amount > maxPledgeInfo.maxPledge)) {
-      setError(`Pledge amount must be between ${maxPledgeInfo.minPledge} and ${maxPledgeInfo.maxPledge} BTC`);
-      return;
+    if (maxPledgeInfo) {
+      const minBTC = (maxPledgeInfo.minPledgeSats ?? 0) / 1e8;
+      const maxBTC = (maxPledgeInfo.maxPledgeSats ?? Number.POSITIVE_INFINITY) / 1e8;
+      if (amount < minBTC || amount > maxBTC) {
+        setError(`Pledge amount must be between ${minBTC} and ${Number.isFinite(maxBTC) ? maxBTC : '∞'} BTC`);
+        return;
+      }
     }
 
     // Testing-mode: enforce demo balance cap ($10k USD)
@@ -228,7 +232,13 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
       }
 
       // Optional: re-check ceiling; proceed regardless to allow refund tracking
-      const payload: any = { userId, btcAmount: amount, walletDetails, txid: txFromPay, depositAddress };
+      const payload: CreatePledgeRequest = {
+        userId,
+        satsAmount: sats,
+        walletDetails,
+        txid: txFromPay,
+        depositAddress
+      };
 
       const response = await fetch(`${apiUrl}/api/pledges/`, {
         method: 'POST',
@@ -242,7 +252,7 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
         throw new Error(message);
       }
 
-      const data = await response.json();
+      const data: CreatePledgeResponse = await response.json();
       if (mountedRef.current) {
         setPledgeData(data);
         setBtcAmount('');
@@ -262,8 +272,8 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
 
   const isAuctionActive = auctionState?.isActive ?? false;
   const ceilingReached = !!auctionState?.ceilingReached;
-  const belowMinCapacity = !!maxPledgeInfo && maxPledgeInfo.maxPledge < maxPledgeInfo.minPledge;
-  const zeroCapacity = !!maxPledgeInfo && maxPledgeInfo.maxPledge <= 0;
+  const belowMinCapacity = !!maxPledgeInfo && (maxPledgeInfo.maxPledgeSats ?? 0) < (maxPledgeInfo.minPledgeSats ?? 0);
+  const zeroCapacity = !!maxPledgeInfo && (maxPledgeInfo.maxPledgeSats ?? 0) <= 0;
 
   return (
     <div className="bg-gradient-to-br from-dark-800/50 to-dark-700/50 backdrop-blur-md border border-primary-500/30 rounded-xl p-6 transition-all hover:border-primary-500/60 hover:shadow-glow-md">
@@ -318,11 +328,11 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
       {pledgeData && pledgeData.verified && (
         <div className="bg-gradient-to-r from-green-600/20 to-green-700/20 border border-green-500/30 text-green-400 px-4 py-3 rounded-lg mb-4">
           <h3 className="font-semibold mb-2">Pledge Verified!</h3>
-          <p className="text-sm">Your pledge of {pledgeData.btcAmount} BTC is confirmed.</p>
-          {(pledgeData.refundedAmount ?? 0) > 0 && (
+          <p className="text-sm">Your pledge of {((pledgeData.satsAmount ?? 0) / 1e8).toFixed(8)} BTC is confirmed.</p>
+          {(pledgeData.refundedSats ?? 0) > 0 && (
             <div className="mt-2 p-2 bg-amber-500/20 border border-amber-400/30 rounded-lg">
               <p className="text-amber-400 text-sm">
-                <span className="font-semibold">Note:</span> {pledgeData.refundedAmount} BTC has been refunded as the ceiling market cap was reached.
+                <span className="font-semibold">Note:</span> {(Number(pledgeData.refundedSats) / 1e8).toFixed(8)} BTC has been refunded as the ceiling market cap was reached.
               </p>
             </div>
           )}
@@ -350,8 +360,8 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
                 setBtcAmount(parts.join('.'));
               }}
               step="0.00000001"
-              min={maxPledgeInfo ? String(maxPledgeInfo.minPledge) : undefined}
-              max={maxPledgeInfo ? String(maxPledgeInfo.maxPledge) : undefined}
+              min={maxPledgeInfo ? String((maxPledgeInfo.minPledgeSats ?? 0) / 1e8) : undefined}
+              max={maxPledgeInfo ? String((maxPledgeInfo.maxPledgeSats ?? 0) / 1e8) : undefined}
               className="w-full px-3 py-2 bg-dark-900/50 border border-primary-500/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 pr-12 text-gray-200 placeholder-gray-500"
               placeholder="0.01"
               required
@@ -363,7 +373,7 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
           </div>
           {maxPledgeInfo && (
             <p className="text-xs text-gray-500 mt-1.5">
-              Min: {maxPledgeInfo.minPledge} BTC | Max: {maxPledgeInfo.maxPledge} BTC | Current BTC Price: ${maxPledgeInfo.currentBTCPrice.toLocaleString()}
+              Min: {((maxPledgeInfo.minPledgeSats ?? 0) / 1e8).toFixed(8)} BTC | Max: {((maxPledgeInfo.maxPledgeSats ?? 0) / 1e8).toFixed(8)} BTC | Current BTC Price: ${maxPledgeInfo.currentBTCPrice.toLocaleString()}
             </p>
           )}
           {isTesting && demoMaxBtc > 0 && (

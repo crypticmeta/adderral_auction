@@ -1,6 +1,7 @@
 // File: PledgeInterface.tsx - Modern pledge UI; disables when BTC price unavailable or wallet not connected. Shows wallet BTC/USD balance. Testing mode shows demo $100k USD-equivalent balance; verification handled on backend.
+// Note: Builds CreatePledgeRequest with canonical satsAmount (BTC optional for back-compat). This UI does not initiate payment; non-testing pledges will fail without txid.
 import React, { useEffect, useMemo, useState } from 'react';
-import type { WalletDetails } from '@shared/types/common';
+import type { WalletDetails, CreatePledgeRequest } from '@shared/types/common';
 import { useWalletBalance } from 'bitcoin-wallet-adapter';
 import { useWebSocket } from '@/hooks/use-websocket';
 
@@ -126,7 +127,7 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
     }
 
     const amount = parseFloat(pledgeAmount);
-    if (isNaN(amount) || (minPledge && amount < minPledge) || (maxPledge && amount > maxPledge)) {
+    if (Number.isNaN(amount) || (minPledge && amount < minPledge) || (maxPledge && amount > maxPledge)) {
       setMessage({ type: 'error', title: 'Invalid amount', description: `Pledge amount must be between ${minPledge} and ${maxPledge} BTC` });
       return;
     }
@@ -158,12 +159,15 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
         wallet: 'Unknown',
         connected: !!isWalletConnected,
       };
-      const payload = {
+      // Compute canonical sats amount from BTC
+      const sats = Math.max(0, Math.round((Number.isFinite(amount) ? amount : 0) * 1e8));
+      // Local payload type: txid optional here since this UI doesn't initiate payment
+      type LocalCreatePledge = Omit<CreatePledgeRequest, 'txid'> & { txid?: string };
+      const payload: LocalCreatePledge = {
         // Prefer wallet cardinal address as the user identifier; fallback to guestId
         userId: (walletAddress && walletAddress.length > 0) ? walletAddress : guestId,
-        btcAmount: amount,
+        satsAmount: sats,
         walletDetails,
-        signature: isTesting ? 'testing-signature' : 'signature',
         // Note: This UI does not trigger payment; include txid only in testing to satisfy backend contract
         ...(isTesting ? { txid: 'testing-txid' } : {}),
       };

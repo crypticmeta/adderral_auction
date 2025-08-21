@@ -48,9 +48,11 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Motivation: Store all information provided by bitcoin-wallet-adapter (cardinal + ordinal).
  - **API change: Pledges (pay-first flow, single deposit address)**
   - Get deposit address: `GET /api/pledges/deposit-address` → returns `{ depositAddress, network }` where `depositAddress` is read from env `BTC_DEPOSIT_ADDRESS`.
-  - Create pledge after payment: `POST /api/pledges/` with `{ userId, btcAmount, walletDetails, depositAddress, txid }`.
+  - Create pledge after payment: `POST /api/pledges/` with canonical satoshi amount. Body:
+    - Required: `{ userId: string, satsAmount: number, walletDetails: WalletDetails, txid: string }`
+    - Optional (back-compat/UI): `{ btcAmount?: number, depositAddress?: string }`
   - Fetch pledges by cardinal address for an auction: `GET /api/pledges/auction/:auctionId/cardinal/:cardinalAddress`.
-  - Frontend `PledgeForm.tsx` fetches the deposit address, triggers wallet `payBTC`, and only then creates the pledge with the returned `txid`. No verify or attach endpoints are used. Scheduler confirms on-chain.
+  - Frontend fetches the deposit address, triggers wallet payment, obtains `txid`, then creates the pledge. The backend scheduler confirms on-chain; there are no verify/attach endpoints.
 - **Backend stability fixes**
   - Implemented Prisma client singleton at `backend/src/config/prisma.ts` and refactored all usages to prevent connection pool exhaustion (timeouts P2024).
   - Added Redis error handlers to Socket.IO Redis adapter clients in `backend/src/websocket/socketHandler.ts` to avoid unhandled connection errors.

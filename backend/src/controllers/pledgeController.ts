@@ -110,8 +110,11 @@ export const getUserPledgesByCardinal = async (req: Request, res: Response) => {
     const enrichedPledges = await Promise.all(pledges.map(async (pledge) => {
       const position = await pledgeQueueService.getPledgePosition(pledge.id);
       const { processed, needsRefund } = await pledgeQueueService.getPledgeProcessedStatus(pledge.id);
+      const sat = (pledge as any).satAmount ?? 0;
       return {
         ...pledge,
+        // canonical exposure
+        satsAmount: sat,
         queuePosition: position,
         processed,
         needsRefund
@@ -189,9 +192,9 @@ const calculateMaxPledgeInternal = async (auction: any): Promise<number> => {
  */
 export const createPledge = async (req: Request, res: Response) => {
   try {
-    const { userId, btcAmount, walletDetails, signature, txid, depositAddress: depositFromBody } = req.body as any;
+    const { userId, satsAmount, walletDetails, signature, txid, depositAddress: depositFromBody } = req.body as any;
 
-    if (!userId || !btcAmount || !walletDetails || !txid) {
+    if (!userId || !satsAmount || !walletDetails || !txid) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -216,7 +219,8 @@ export const createPledge = async (req: Request, res: Response) => {
     // Validate pledge amount (compare in BTC, source of truth in sats)
     const maxPledge = await calculateMaxPledgeInternal(auction);
     const minBTC = ((auction?.minPledgeSats ?? 0) as number) / 1e8;
-    if (Number(btcAmount) < minBTC || Number(btcAmount) > maxPledge) {
+    const btcValue = Number(satsAmount) / 1e8;
+    if (btcValue < minBTC || btcValue > maxPledge) {
       return res.status(400).json({
         error: `Pledge amount must be between ${minBTC} and ${maxPledge} BTC`
       });
@@ -232,8 +236,8 @@ export const createPledge = async (req: Request, res: Response) => {
     const pledge = await prisma.pledge.create({
       data: {
         userId,
-        // store in sats
-        satAmount: Math.round(Number(btcAmount) * 1e8),
+        // store in sats (canonical)
+        satAmount: Math.round(Number(satsAmount)),
         auctionId: auction.id,
         depositAddress,
         signature: signature ?? null,
@@ -281,6 +285,9 @@ export const createPledge = async (req: Request, res: Response) => {
 
     return res.status(201).json({
       ...pledge,
+      // explicit canonical field for clients
+      satsAmount: pledge.satAmount,
+      refundedSats: (pledge as any).refundedSats ?? undefined,
       queuePosition
     });
   } catch (error: any) {
@@ -329,12 +336,13 @@ export const getPledges = async (req: Request, res: Response) => {
       }
     });
     
-    // Enrich pledges with queue position, processed status, and refund status
+    // Enrich pledges with queue position, processed status, refund status, and canonical satsAmount
     const enrichedPledges = await Promise.all(pledges.map(async (pledge) => {
       const position = await pledgeQueueService.getPledgePosition(pledge.id);
       const { processed, needsRefund } = await pledgeQueueService.getPledgeProcessedStatus(pledge.id);
       return {
         ...pledge,
+        satsAmount: (pledge as any).satAmount ?? 0,
         queuePosition: position,
         processed,
         needsRefund
@@ -375,12 +383,13 @@ export const getUserPledges = async (req: Request, res: Response) => {
       orderBy: { timestamp: 'asc' }
     });
     
-    // Enrich pledges with queue position, processed status, and refund status
+    // Enrich pledges with queue position, processed status, refund status, and canonical satsAmount
     const enrichedPledges = await Promise.all(pledges.map(async (pledge) => {
       const position = await pledgeQueueService.getPledgePosition(pledge.id);
       const { processed, needsRefund } = await pledgeQueueService.getPledgeProcessedStatus(pledge.id);
       return {
         ...pledge,
+        satsAmount: (pledge as any).satAmount ?? 0,
         queuePosition: position,
         processed,
         needsRefund
@@ -433,11 +442,10 @@ export const calculateMaxPledge = async (req: Request, res: Response) => {
     const btcPrice = await btcPriceService.getBitcoinPrice();
     
     return res.status(200).json({
-      minPledge: minBTC,
-      maxPledge: maxAmount, // calculated max in BTC
-      currentBTCPrice: btcPrice,
-      minPledgeUSD: minBTC * btcPrice,
-      maxPledgeUSD: maxAmount * btcPrice
+      // canonical sats fields only
+      minPledgeSats: auction?.minPledgeSats ?? undefined,
+      maxPledgeSats: auction?.maxPledgeSats ?? undefined,
+      currentBTCPrice: btcPrice
     });
   } catch (error) {
     console.error('Error calculating max pledge:', error);

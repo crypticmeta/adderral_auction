@@ -106,22 +106,25 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
           throw new Error('Failed to fetch pledges');
         }
         const data = await response.json();
-        // Map backend fields to UI expectations safely
-        const mapped = Array.isArray(data) ? data.map((p: any) => ({
-          id: p?.id,
-          userId: p?.userId ?? '',
-          btcAmount: p?.btcAmount != null
-            ? Number(p.btcAmount)
-            : (p?.satAmount != null ? Number(p.satAmount) / 1e8 : 0),
-          timestamp: p?.timestamp ?? '',
-          queuePosition: p?.queuePosition ?? null,
-          processed: Boolean(p?.verified || (p?.status === 'verified') || (Number(p?.confirmations ?? 0) > 0)),
-          needsRefund: Boolean(p?.status === 'refunded' || p?.status === 'pending_refund'),
-          user: p?.user ? {
-            cardinal_address: p.user.cardinal_address ?? null,
-            ordinal_address: p.user.ordinal_address ?? null,
-          } : undefined,
-        })) : [];
+        // Map backend fields to canonical UI shape with satsAmount
+        const mapped = Array.isArray(data) ? data.map((p: any) => {
+          const sats: number = p?.satsAmount != null
+            ? Number(p.satsAmount)
+            : (p?.satAmount != null ? Number(p.satAmount) : 0);
+          return {
+            id: p?.id,
+            userId: p?.userId ?? '',
+            satsAmount: Number.isFinite(sats) ? sats : 0,
+            timestamp: p?.timestamp ?? '',
+            queuePosition: p?.queuePosition ?? null,
+            processed: Boolean(p?.verified || (p?.status === 'verified') || (Number(p?.confirmations ?? 0) > 0)),
+            needsRefund: Boolean(p?.status === 'refunded' || p?.status === 'pending_refund'),
+            user: p?.user ? {
+              cardinal_address: p.user.cardinal_address ?? null,
+              ordinal_address: p.user.ordinal_address ?? null,
+            } : undefined,
+          } as PledgeItem;
+        }) : [];
         if (mountedRef.current) setQueuedPledges(mapped);
       } catch (err) {
         if (mountedRef.current) setError(err instanceof Error ? err.message : 'Failed to fetch pledges');
@@ -232,11 +235,11 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div>
               <span className="text-gray-400">Min Pledge:</span>
-              <span className="ml-2">{maxPledgeInfo.minPledge} BTC</span>
+              <span className="ml-2">{((maxPledgeInfo.minPledgeSats ?? 0) / 1e8).toFixed(8)} BTC</span>
             </div>
             <div>
               <span className="text-gray-400">Max Pledge:</span>
-              <span className="ml-2">{maxPledgeInfo.maxPledge} BTC</span>
+              <span className="ml-2">{((maxPledgeInfo.maxPledgeSats ?? 0) / 1e8).toFixed(8)} BTC</span>
             </div>
             <div>
               <span className="text-gray-400">BTC Price:</span>
@@ -263,7 +266,7 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
               >
                 <div className="flex justify-between items-center">
                   <div>
-                    <span className="font-semibold">{pledge.btcAmount} BTC</span>
+                    <span className="font-semibold">{(pledge.satsAmount / 1e8).toFixed(8)} BTC</span>
                     <div className="text-xs mt-1">
                       {pledge.processed ? (
                         pledge.needsRefund ? (
@@ -337,10 +340,10 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">{pledge.processed ? '—' : (pledge.queuePosition ?? '—')}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      <span className="font-medium text-gray-200">{formatNumber(pledge.btcAmount)} BTC</span>
+                      <span className="font-medium text-gray-200">{formatNumber(pledge.satsAmount / 1e8)} BTC</span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      <span className="text-gray-300">{formatNumber(estimateAllocation(pledge.btcAmount) ?? null, 2)} ADDERRELS</span>
+                      <span className="text-gray-300">{formatNumber(estimateAllocation(pledge.satsAmount / 1e8) ?? null, 2)} ADDERRELS</span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       {pledge.processed ? (
