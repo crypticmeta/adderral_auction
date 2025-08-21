@@ -74,7 +74,9 @@ describe('PledgeInterface - validation and gating', () => {
   });
 
   it('does not show estimated tokens block when calculation is zero', () => {
-    render(<PledgeInterface {...baseProps} isWalletConnected={true} />);
+    // Override currentPrice so that estimated tokens floor to 0 for the given input.
+    // With btcPrice=40000 and amount=0.1 BTC, pledge USD ~ $4,000; using currentPrice > $4000/token ensures 0 tokens.
+    render(<PledgeInterface {...baseProps} isWalletConnected={true} currentPrice={10000} />);
     const input = screen.getByTestId('input-pledge-amount');
     fireEvent.change(input, { target: { value: '0.1' } });
     // current implementation yields 0 estimated tokens -> block hidden
