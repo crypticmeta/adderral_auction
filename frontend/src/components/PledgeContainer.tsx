@@ -78,7 +78,6 @@ const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, wa
   const maxPledge = state?.maxPledge ?? (state?.config?.maxPledgeBTC ? parseFloat(state.config.maxPledgeBTC) : undefined);
   const currentPrice = state?.currentPrice ?? 0;
   const priceError = Boolean(state?.priceError);
-  const isAuctionActive = Boolean(state?.isActive);
 
   // Prefer adapter connection over upstream prop
   const adapterConnected = wallet?.connected ?? false;

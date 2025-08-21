@@ -408,6 +408,18 @@ Refund mechanism:
 - Realtime via Socket.IO client
 - Uses `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL`
 
+### Header Wallet Balance
+- The header (`frontend/src/components/Header.tsx`) now shows the connected wallet's confirmed BTC balance and an approximate USD value.
+- Implemented using `useWalletBalance` from `bitcoin-wallet-adapter` with null-safe checks.
+- Updates automatically when the wallet state changes; after pledging, most wallets reflect a pending deduction which will be captured by the hook on next refresh cycle.
+
+Example internals:
+```javascript
+import { ConnectMultiButton, useWalletBalance } from 'bitcoin-wallet-adapter';
+const { balance, btcPrice } = useWalletBalance();
+const confirmedBtc = balance?.confirmed ?? 0;
+```
+
 ### Recent Activity / Pledge Queue UI
 
 - Random avatars per user via DiceBear seeded by their address/userId

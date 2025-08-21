@@ -9,7 +9,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ConnectMultiButton } from 'bitcoin-wallet-adapter';
+import { ConnectMultiButton, useWalletBalance } from 'bitcoin-wallet-adapter';
 import { useEffect, useState } from 'react';
 import ResetDbButton from './ResetDbButton';
 import type { WalletDetails } from '@shared/types/common';
@@ -18,6 +18,13 @@ export default function Header() {
   const isTesting = process.env.NEXT_PUBLIC_TESTING === 'true';
   const [testConnected, setTestConnected] = useState(false);
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  // Wallet balance (confirmed) from adapter; null-safe defaults
+  const { balance, btcPrice } = useWalletBalance();
+  const confirmedBtc = (balance?.confirmed ?? 0);
+  const confirmedBtcStr = Number.isFinite(confirmedBtc) ? confirmedBtc.toFixed(8) : '0.00000000';
+  const usdStr = btcPrice && Number.isFinite(btcPrice)
+    ? `≈ $${(confirmedBtc * btcPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+    : '';
 
   // Track testing connection status for UX feedback
   useEffect(() => {
@@ -156,6 +163,19 @@ export default function Header() {
 
           {/* Actions */}
           <div className="flex items-center gap-3">
+            {/* Wallet balance badge (hidden in testing mode) */}
+            {!isTesting && (
+              <div
+                className="hidden sm:flex items-center gap-2 rounded-md border border-primary-500/30 bg-dark-800/60 px-3 py-1.5 text-xs text-gray-200"
+                role="status"
+                aria-live="polite"
+                aria-label={`Wallet balance ${confirmedBtcStr} BTC${usdStr ? `, ${usdStr}` : ''}`}
+              >
+                <span className="text-primary-300 font-semibold">Balance:</span>
+                <span className="tabular-nums">{confirmedBtcStr} BTC</span>
+                {usdStr && <span className="text-gray-400">{usdStr}</span>}
+              </div>
+            )}
             {/* Dev-only reseed button */}
             <ResetDbButton apiUrl={apiUrl} />
             {!isTesting ? (
