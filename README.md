@@ -103,6 +103,7 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Bitcoin price service tests perform real HTTP calls (no mocks) and assert Redis cache TTLs
   - Scheduled tasks use a leak-safe interval with `.unref()` and expose `stopBitcoinPriceRefresh()` for tests
   - Detailed logs added to global setup; Prisma generate/migrate executed automatically
+  - Tx confirmation scheduler test verifies pending vs confirmed txids using live mempool.space
 - **Animated Auction Progress Bar (Live-reactive)**
   - Lively gradient fill with shimmer and subtle bump on pledge-driven increases
   - Reacts in real time to `auction_status` WebSocket updates
@@ -502,6 +503,11 @@ NEXT_PUBLIC_TESTING=true
 - Backend tests live under `backend/src/tests/`:
   - `bitcoinPriceService.test.ts`: live HTTP; validates median calc, short/long Redis caches, and failure handling.
   - `scheduledTasks.test.ts`: starts the real scheduler and waits for Redis to populate; stops interval after each test.
+  - `txConfirmationScheduler.e2e.test.ts`: uses mempool.space live endpoints to assert that the tx-confirmation scheduler marks pledges correctly:
+    - Picks a confirmed txid from `frontend/public/txids.json` (verifies it is still confirmed).
+    - Fetches a recent pending txid from `GET https://mempool.space/api/mempool/recent`.
+    - Seeds pledges for both and runs `txConfirmationService.checkUnverifiedPledges()`; expects confirmed/pending statuses respectively.
+    - Note: this test performs real network calls and may be rate-limited; prefer running with local Docker services up (Postgres/Redis) to reduce variability.
   - `socketHandler.price.test.ts`: isolates and mocks BTC price; asserts `priceError` semantics and computed fields.
   - `socketHandler.payload.test.ts`: validates completeness of `auction_status` payload and pledge user addresses across scenarios (price ok/error, ceiling reached).
   - `statusRoutes.test.ts`: validates `GET /api/status` returns `{ network, testing, nodeEnv, btcUsd }` with `btcUsd` as number|null.
@@ -529,6 +535,10 @@ NEXT_PUBLIC_TESTING=true
   ```bash
   yarn test:local
   ```
+  - To run just the tx confirmation scheduler test:
+    ```bash
+    yarn test:local -t "Tx Confirmation Scheduler"
+    ```
 - Notes:
   - In local mode (`USE_LOCAL_SERVICES=true`) global setup skips Testcontainers and Prisma steps. Run DB setup yourself when needed:
     ```bash

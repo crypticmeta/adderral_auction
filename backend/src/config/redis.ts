@@ -21,9 +21,13 @@ redisClient.on('error', (err) => {
   logger.error('Redis connection error:', err);
 });
 
-redisClient.on('connect', () => {
-  logger.info('Connected to Redis server');
-});
+// Avoid noisy connect logs in Jest (they can fire after teardown and trigger warnings)
+const isTestRun = process.env.NODE_ENV === 'test' || !!process.env.JEST_WORKER_ID;
+if (!isTestRun) {
+  redisClient.on('connect', () => {
+    logger.info('Connected to Redis server');
+  });
+}
 
 // Export both as default and named export for flexibility
 export { redisClient };
