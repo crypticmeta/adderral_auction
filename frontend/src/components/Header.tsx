@@ -13,18 +13,26 @@ import { ConnectMultiButton, useWalletBalance } from 'bitcoin-wallet-adapter';
 import { useEffect, useState } from 'react';
 import ResetDbButton from './ResetDbButton';
 import type { WalletDetails } from '@shared/types/common';
+import { env } from '../config/env';
 
 export default function Header() {
-  const isTesting = process.env.NEXT_PUBLIC_TESTING === 'true';
+  const isTesting = env.testing;
   const [testConnected, setTestConnected] = useState(false);
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-  // Wallet balance (confirmed) from adapter; null-safe defaults
+  const apiUrl = env.apiUrl;
+  // Wallet balance (confirmed) from adapter; show only when connected
   const { balance, btcPrice } = useWalletBalance();
-  const confirmedBtc = (balance?.confirmed ?? 0);
-  const confirmedBtcStr = Number.isFinite(confirmedBtc) ? confirmedBtc.toFixed(8) : '0.00000000';
-  const usdStr = btcPrice && Number.isFinite(btcPrice)
-    ? `≈ $${(confirmedBtc * btcPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-    : '';
+  const hasConnectedBalance = typeof balance?.confirmed === 'number' && Number.isFinite(balance.confirmed);
+  const confirmedBtc = hasConnectedBalance ? balance!.confirmed : undefined;
+  const btcStr = typeof confirmedBtc === 'number' ? confirmedBtc.toFixed(8) : null;
+  const usdApprox = typeof confirmedBtc === 'number' && Number.isFinite(btcPrice || NaN)
+    ? (confirmedBtc * (btcPrice as number))
+    : null;
+
+  // Helpers: trim trailing zeros and switch to sats for very small balances
+  const trimZeros = (s: string) => s.replace(/\.0+$|(?<=\.[0-9]*?)0+$/g, '').replace(/\.$/, '');
+  const toFixedTrim = (v: number, max: number) => trimZeros(v.toLocaleString(undefined, { maximumFractionDigits: max, minimumFractionDigits: 0 }));
+  const sats = typeof confirmedBtc === 'number' ? Math.round(confirmedBtc * 1e8) : null;
+  const showAsSats = typeof sats === 'number' && sats < 1_000_000; // < 0.01 BTC
 
   // Track testing connection status for UX feedback
   useEffect(() => {
@@ -32,12 +40,12 @@ export default function Header() {
     try {
       const flag = localStorage.getItem('testWalletConnected');
       setTestConnected(flag === 'true');
-    } catch (_) {}
+    } catch (_) { }
     const update = () => {
       try {
         const flag2 = localStorage.getItem('testWalletConnected');
         setTestConnected(flag2 === 'true');
-      } catch (_) {}
+      } catch (_) { }
     };
     const onStorage = (e: StorageEvent) => {
       if (!e) return;
@@ -163,17 +171,35 @@ export default function Header() {
 
           {/* Actions */}
           <div className="flex items-center gap-3">
-            {/* Wallet balance badge (hidden in testing mode) */}
-            {!isTesting && (
+            {/* Wallet balance badge (hidden in testing mode and when no wallet connected) */}
+            {!isTesting && hasConnectedBalance && (
               <div
-                className="hidden sm:flex items-center gap-2 rounded-md border border-primary-500/30 bg-dark-800/60 px-3 py-1.5 text-xs text-gray-200"
+                className="hidden sm:flex items-center rounded-full border border-white/15 bg-white/5 backdrop-blur px-3 py-1.5 text-[11px] text-gray-100 shadow-sm"
                 role="status"
                 aria-live="polite"
-                aria-label={`Wallet balance ${confirmedBtcStr} BTC${usdStr ? `, ${usdStr}` : ''}`}
+                aria-label={showAsSats
+                  ? `Wallet balance ${sats?.toLocaleString()} sats${btcStr ? `, ${trimZeros(btcStr)} BTC` : ''}`
+                  : `Wallet balance ${trimZeros(toFixedTrim(confirmedBtc as number, (confirmedBtc as number) >= 1 ? 4 : 6))} BTC${usdApprox != null ? `, approximately $${usdApprox.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : ''}`}
+                title={usdApprox != null ? `≈ $${usdApprox.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : undefined}
               >
-                <span className="text-primary-300 font-semibold">Balance:</span>
-                <span className="tabular-nums">{confirmedBtcStr} BTC</span>
-                {usdStr && <span className="text-gray-400">{usdStr}</span>}
+                <span className="text-primary-200 font-semibold mr-2 tracking-wide">Balance:</span>
+                {showAsSats ? (
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-mono tabular-nums font-medium">{sats?.toLocaleString()} sats</span>
+                    {btcStr && (
+                      <span className="text-[10px] text-gray-400 font-mono">{trimZeros(btcStr)} BTC</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-mono tabular-nums font-medium">
+                      {toFixedTrim(confirmedBtc as number, (confirmedBtc as number) >= 1 ? 4 : 6)} BTC
+                    </span>
+                    {usdApprox != null && (
+                      <span className="text-gray-400">≈ ${usdApprox.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             {/* Dev-only reseed button */}
@@ -181,9 +207,11 @@ export default function Header() {
             {!isTesting ? (
               <ConnectMultiButton
                 icon="/adderrel.png"
-                network="mainnet"
+                network={env.btcNetwork}
                 connectionMessage="Connect your wallet to participate in the auction."
                 buttonClassname="bg-adderrels-500 text-white hover:bg-adderrels-500/90 transition-colors rounded-md px-3 py-2 text-sm font-medium"
+              // supportedWallets={["Unisat", "Xverse", "Leather", "Okx", "Magiceden"]}
+              // balance={hasConnectedBalance ? (confirmedBtc as number) : undefined}
               />
             ) : (
               <div className="flex items-center gap-2">
@@ -191,11 +219,11 @@ export default function Header() {
                   type="button"
                   onClick={handleTestConnect}
                   disabled={testConnected}
-                  className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                    testConnected
-                      ? 'bg-green-600 text-white cursor-default'
-                      : 'bg-purple-600 text-white hover:bg-purple-500'
-                  }`}
+                  className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${testConnected
+                    ? 'bg-green-600 text-white cursor-default'
+                    : 'bg-purple-600 text-white hover:bg-purple-500'
+                    }`}
+                  aria-label={testConnected ? 'Testing wallet connected' : 'Connect testing wallet'}
                 >
                   {testConnected ? 'Connected' : 'Test Connect'}
                 </button>
@@ -206,6 +234,7 @@ export default function Header() {
                       type="button"
                       onClick={handleTestDisconnect}
                       className="rounded-md px-3 py-2 text-xs font-medium bg-gray-700 text-gray-200 hover:bg-gray-600"
+                      aria-label="Disconnect testing wallet"
                     >
                       Disconnect
                     </button>

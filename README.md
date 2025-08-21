@@ -331,10 +331,17 @@ Notes:
 
 4. Adjust values in `.env.local` as needed (defaults shown in the example):
    ```
-   NEXT_PUBLIC_API_URL=http://localhost:5000
-   NEXT_PUBLIC_WS_URL=ws://localhost:5000
-   NEXT_PUBLIC_APP_ENV=development
-   ```
+  NEXT_PUBLIC_API_URL=http://localhost:5000
+  NEXT_PUBLIC_WS_URL=ws://localhost:5000
+  NEXT_PUBLIC_APP_ENV=development
+  NEXT_PUBLIC_BTC_NETWORK=mainnet
+  NEXT_PUBLIC_TESTING=false
+  ```
+
+5. Centralized env config (frontend):
+  - File: `frontend/src/config/env.ts`
+  - Import via `import { env } from '@/config/env'` or relative from components.
+  - Exposes: `apiUrl`, `wsUrl`, `appEnv`, `testing`, `btcNetwork`.
 
 5. Start the development server:
    ```bash
@@ -368,9 +375,9 @@ The Adderrels auction follows a First Come, First Served (FCFS) model with these
 
 - Total tokens for sale: 100 million (10% of total supply)
 - Ceiling market cap: $15 million
-- Auction duration: 72 hours
-- Minimum pledge: 0.001 BTC (stored as 100,000 sats)
-- Maximum pledge: 0.5 BTC (stored as 50,000,000 sats)
+- Default auction duration: 72 hours
+- Dev reseed mode creates a separate 24-hour demo auction targeting ~$1,000 total in USD terms (see below).
+- Minimum/Maximum pledge are stored as sats and may be dynamically set by reseed.
 
 Auction scenarios:
 - Scenario 1: Ceiling market cap reached before 72 hours, auction ends immediately
@@ -388,7 +395,7 @@ Refund mechanism:
 ### Auction
 - `GET /api/auction/status` - Get auction status (public)
 - `POST /api/auction/reset` - Dev-only auction reset: deletes pledges for the active auction and restarts it with a fresh 72h window; does not touch users
-- `POST /api/auction/reseed` - Dev-only full DB wipe + reseed: truncates `User`, `Auction`, `Pledge` and seeds admin, sample users, one active auction, and sample pledges
+- `POST /api/auction/reseed` - Dev-only full DB wipe + reseed: truncates `User`, `Auction`, `Pledge` and seeds admin, sample users, one active 24h auction targeting ~$1,000 (USD) using live BTC price to set dynamic `minPledgeSats`/`maxPledgeSats`, and 6–10 pledges totaling near the target.
 
 ## WebSocket Messages
 
@@ -411,9 +418,16 @@ Refund mechanism:
 - Uses `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL`
 
 ### Header Wallet Balance
-- The header (`frontend/src/components/Header.tsx`) now shows the connected wallet's confirmed BTC balance and an approximate USD value.
-- Implemented using `useWalletBalance` from `bitcoin-wallet-adapter` with null-safe checks.
-- Updates automatically when the wallet state changes; after pledging, most wallets reflect a pending deduction which will be captured by the hook on next refresh cycle.
+- The header (`frontend/src/components/Header.tsx`) shows the connected wallet's confirmed BTC balance and an approximate USD value.
+- Balance badge is hidden when no wallet is connected (no `confirmed` balance available).
+- Implemented using `useWalletBalance` from `bitcoin-wallet-adapter` with null-safe checks and improved formatting.
+- `ConnectMultiButton` now:
+  - Uses network from `env.btcNetwork` (`NEXT_PUBLIC_BTC_NETWORK`).
+  - Limits `supportedWallets` to `Unisat`, `Xverse`, `Leather` (Phantom excluded).
+  - Optionally receives current balance for display.
+
+### Reset DB Button (Dev-only)
+- `ResetDbButton.tsx` adds an AbortController with a 15s timeout for `/api/auction/reseed` to avoid hanging requests and shows a friendly timeout error.
 
 Example internals:
 ```javascript

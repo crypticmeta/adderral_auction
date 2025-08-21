@@ -32,7 +32,11 @@ const ResetDbButton: React.FC<ResetDbButtonProps> = ({ apiUrl, className }) => {
 
     try {
       setPending(true);
-      const res = await fetch(`${apiUrl}/api/auction/reseed`, { method: 'POST' });
+      const controller = new AbortController();
+      const timeoutMs = 15000; // 15s
+      const t = setTimeout(() => controller.abort(), timeoutMs);
+      const res = await fetch(`${apiUrl}/api/auction/reseed`, { method: 'POST', signal: controller.signal });
+      clearTimeout(t);
       if (!res.ok) {
         const j = await res.json().catch(() => ({} as any));
         throw new Error(j?.message || 'Reset failed');
@@ -40,7 +44,11 @@ const ResetDbButton: React.FC<ResetDbButtonProps> = ({ apiUrl, className }) => {
       const j = await res.json().catch(() => null as any);
       setMsg(j?.message || 'Database wiped and reseeded');
     } catch (e: any) {
-      setErr(String(e?.message || 'Unexpected error'));
+      if (e?.name === 'AbortError') {
+        setErr('Request timed out. Please try again.');
+      } else {
+        setErr(String(e?.message || 'Unexpected error'));
+      }
     } finally {
       setPending(false);
     }

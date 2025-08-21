@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../../../config/prisma';
 import { addHours } from 'date-fns';
+import { bitcoinPriceService } from '../../../services/bitcoinPriceService';
 
 // Extend Express Request type to include user property
 declare global {
@@ -37,6 +38,20 @@ export const verifyAdminAccess = async (req: Request, res: Response, next: NextF
  */
 export const reseedDb = async (_req: Request, res: Response) => {
   try {
+    // Get current BTC price (USD) to derive $1000 target in sats
+    let btcUsd = 0;
+    try {
+      btcUsd = await bitcoinPriceService.getBitcoinPrice();
+    } catch (e) {
+      // Fallback conservatively to avoid division by zero
+      btcUsd = 50000; // safe default; reseed remains functional
+    }
+    const targetUsd = 1000;
+    const targetBtc = targetUsd / btcUsd;
+    const targetSats = Math.max(50_000, Math.round(targetBtc * 1e8));
+    // Dynamic min/max sats chosen to allow multiple contributors to reach ~$1000 total
+    const minPledgeSats = Math.max(50_000, Math.round(targetSats / 20)); // ~5% of target
+    const maxPledgeSats = Math.max(minPledgeSats * 4, Math.round(targetSats / 2)); // up to ~50% of target
     // Truncate all core tables
     await prisma.$executeRawUnsafe('TRUNCATE TABLE "Pledge" CASCADE');
     await prisma.$executeRawUnsafe('TRUNCATE TABLE "Auction" CASCADE');
@@ -95,44 +110,68 @@ export const reseedDb = async (_req: Request, res: Response) => {
       data: {
         id: '3551190a-c374-4089-a4b0-35912e65ebdd',
         totalTokens: 100000000,
-        ceilingMarketCap: 15000000,
+        ceilingMarketCap: targetUsd, // set demo ceiling to $1000
         totalBTCPledged: 0,
         refundedBTC: 0,
         startTime: now,
         endTime,
         isActive: true,
         isCompleted: false,
-        minPledgeSats: 100_000,
-        maxPledgeSats: 50_000_000,
+        minPledgeSats,
+        maxPledgeSats,
         network: 'MAINNET',
       },
     });
 
-    // Sample pledges
-    for (const u of testUsers) {
+    // Seed 6–10 pledges totaling around targetSats
+    const contributorCount = Math.max(6, Math.min(10, testUsers.length));
+    const chosenUsers = testUsers.slice(0, contributorCount);
+    // Generate random slices then scale to target
+    const randoms = chosenUsers.map(() => Math.random() + 0.5); // 0.5..1.5 range
+    const sumRand = randoms.reduce((a, b) => a + b, 0);
+    let amounts = randoms.map(r => Math.round((r / sumRand) * targetSats));
+    // Clamp within min/max and adjust to approximate targetSats
+    amounts = amounts.map(a => Math.min(Math.max(a, minPledgeSats), maxPledgeSats));
+    // If sum deviates, adjust last entry within bounds
+    let sumNow = amounts.reduce((a, b) => a + b, 0);
+    const delta = targetSats - sumNow;
+    if (delta !== 0) {
+      const lastIdx = amounts.length - 1;
+      const adjusted = Math.min(Math.max(amounts[lastIdx] + delta, minPledgeSats), maxPledgeSats);
+      sumNow += (adjusted - amounts[lastIdx]);
+      amounts[lastIdx] = adjusted;
+    }
+
+    for (let i = 0; i < chosenUsers.length; i++) {
+      const u = chosenUsers[i];
       await prisma.pledge.create({
         data: {
           userId: u.id,
           auctionId: auction.id,
-          satAmount: Math.round(u.pledgeAmount * 1e8),
+          satAmount: amounts[i],
           depositAddress: 'generated-deposit-address',
           status: 'confirmed',
           verified: true,
+          network: 'MAINNET'
         },
       });
     }
 
-    const totalPledged = testUsers.reduce((sum, u) => sum + u.pledgeAmount, 0);
+    const totalPledgedBtc = amounts.reduce((s, a) => s + a, 0) / 1e8;
     await prisma.auction.update({
       where: { id: auction.id },
-      data: { totalBTCPledged: totalPledged },
+      data: { totalBTCPledged: totalPledgedBtc },
     });
 
     return res.status(200).json({
       message: 'Database wiped and reseeded successfully',
       adminId: admin.id,
       auctionId: auction.id,
-      totalPledged,
+      targetUsd,
+      btcUsd,
+      minPledgeSats,
+      maxPledgeSats,
+      totalPledgedBTC: totalPledgedBtc,
       endTime,
     });
   } catch (error) {
