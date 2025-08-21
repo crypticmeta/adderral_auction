@@ -124,6 +124,73 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
     return Number.isFinite(v) ? v : 0;
   }, [balance?.confirmed]);
 
+  // Normalize wallet/adapter (BWA) errors into actionable UI messages
+  const formatWalletError = (err: any): { title: string; description: string } => {
+    const nested = err?.original || err?.data || err?.cause || {};
+    const finalCode = err?.code || err?.errorCode || nested?.code || nested?.errorCode || err?.name;
+    const isBwa = err?.name === 'BWAError' || err?.source === 'bitcoin-wallet-adapter';
+    const walletType = err?.walletType || err?.wallet || (walletAddress ? 'Wallet' : 'Unknown Wallet');
+    const baseMsg = typeof err?.message === 'string' && err.message !== '[object Object]'
+      ? err.message
+      : (typeof nested?.message === 'string' ? nested.message : '');
+
+    // Known BWA codes
+    if (finalCode === 'USER_REJECTED') {
+      return {
+        title: 'Payment cancelled',
+        description: 'You cancelled the payment in your wallet. If this was unintentional, try again and approve the request.',
+      };
+    }
+    if (finalCode === 'PAYMENT_FAILED') {
+      return {
+        title: 'Payment failed',
+        description: baseMsg || `BTC payment failed with ${walletType}. Ensure the wallet is unlocked, approve the popup, and that you have sufficient funds.`,
+      };
+    }
+    if (finalCode === 'INSUFFICIENT_FUNDS') {
+      return {
+        title: 'Insufficient funds',
+        description: 'Your wallet balance is insufficient for this pledge amount plus network fees. Reduce the amount or fund your wallet and retry.',
+      };
+    }
+    if (finalCode === 'NETWORK_MISMATCH') {
+      return {
+        title: 'Network mismatch',
+        description: 'Your wallet is on a different Bitcoin network than required. Switch networks in your wallet and retry.',
+      };
+    }
+    if (finalCode === 'TIMEOUT') {
+      return {
+        title: 'Wallet timeout',
+        description: 'The wallet did not respond in time. Reopen the wallet popup and try again.',
+      };
+    }
+    if (finalCode === 'POPUP_BLOCKED') {
+      return {
+        title: 'Popup blocked',
+        description: 'Your browser blocked the wallet popup. Allow popups for this site or open the wallet manually and retry.',
+      };
+    }
+    if (finalCode === 'PROVIDER_UNAVAILABLE') {
+      return {
+        title: 'Wallet provider unavailable',
+        description: 'Your wallet provider is not available in this browser context. Please install/enable it and reload the page.',
+      };
+    }
+    if (finalCode === 'WALLET_NOT_CONNECTED') {
+      return {
+        title: 'Wallet not connected',
+        description: 'Connect your wallet before pledging. Use the Connect button and try again.',
+      };
+    }
+
+    // Fallback
+    return {
+      title: isBwa ? 'Wallet error' : 'Error',
+      description: baseMsg || 'The wallet reported an unknown error. Please retry or switch wallets.',
+    };
+  };
+
   const priceUsd = useMemo(() => {
     // Prefer backend price
     if (typeof backendPrice === 'number' && Number.isFinite(backendPrice)) return backendPrice;
@@ -312,14 +379,16 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
         txFromPay = `test-${Date.now().toString(16)}-${randHex}`;
       } else {
         if (typeof payBTC !== 'function') {
-          throw new Error('Wallet payment function unavailable.');
+          throw { code: 'PROVIDER_UNAVAILABLE', message: 'Wallet payment function unavailable.' };
         }
         try {
           const payRes = await payBTC({ address: depositAddress, amount: sats, network });
           txFromPay = payRes?.txid || payRes?.txId || payRes?.transactionId;
         } catch (payErr: any) {
-          const msg = payErr?.message || payErr?.error || 'Payment failed or was rejected.';
-          throw new Error(msg);
+          const { title, description } = formatWalletError(payErr);
+          // Surface error in UI and stop the pledge flow; finally{} will clear pending state
+          setMessage({ type: 'error', title, description });
+          return;
         }
       }
 
@@ -352,7 +421,12 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
 
       // Frontend no longer auto-verifies in testing; backend handles verification.
     } catch (e: any) {
-      setMessage({ type: 'error', title: 'Pledge failed', description: String(e?.message || 'There was an error processing your pledge') });
+      // Handle wallet adapter specific errors gracefully
+      const m = typeof e?.message === 'string' ? e.message : null;
+      const asFmt = !m || m.indexOf(':') === -1 ? formatWalletError(e) : null;
+      const title = asFmt ? asFmt.title : 'Error';
+      const description = asFmt ? asFmt.description : (m || 'Something went wrong');
+      setMessage({ type: 'error', title, description });
     } finally {
       setIsPending(false);
     }
