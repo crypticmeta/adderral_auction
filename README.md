@@ -37,6 +37,10 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Default network is `mainnet`; override via `customAuthOptions` if needed
   - Auction Progress bar formatting/accessibility improvements (Intl formatting, ARIA valuetext, clamped display percent)
   - Removed refund display from UI; refunds (if any) are handled manually by the team and not surfaced in the interface
+  - Auction Stats numbers now use compact formatting (Intl):
+    - Tokens: K/M/B automatically (no fixed `M` suffix). Implemented in `frontend/src/components/auction-stats.tsx`.
+    - USD values: compact currency, e.g. `$5K`, `$15M`.
+    - Null-safe parsing with fallbacks.
 # Adderrels Auction Platform
 
 ## Recent Updates

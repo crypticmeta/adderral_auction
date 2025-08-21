@@ -66,7 +66,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     const minPledgeNum: number | undefined = typeof data.minPledge === 'number' ? data.minPledge : undefined;
     const maxPledgeNum: number | undefined = typeof data.maxPledge === 'number' ? data.maxPledge : undefined;
 
-    // Prefer precise timing via endTime - serverTime for consistency across clients
+    // Prefer precise timing via start/end - serverTime for consistency across clients
+    const startTimeMs: number | null = data.startTime ? new Date(data.startTime).getTime() : null;
     const endTimeMs: number | null = data.endTime ? new Date(data.endTime).getTime() : null;
     const serverTimeMs: number | null = typeof data.serverTime === 'number' ? data.serverTime : null;
     let remainingMs = 0;
@@ -120,6 +121,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       minPledge: minPledgeNum,
       maxPledge: maxPledgeNum,
       timeRemaining: { hours, minutes, seconds },
+      startTimeMs: startTimeMs ?? undefined,
       endTimeMs: endTimeMs ?? undefined,
       serverTimeMs: serverTimeMs ?? undefined,
       recentActivity,

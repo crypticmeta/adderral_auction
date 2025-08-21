@@ -41,6 +41,8 @@ export interface AuctionState {
     minutes: number;
     seconds: number;
   };
+  // Milliseconds-since-epoch timestamps (optional; provided by backend when available)
+  startTimeMs?: number;
   endTimeMs?: number;
   serverTimeMs?: number;
   recentActivity: AuctionActivity[];

@@ -9,6 +9,7 @@ import PledgeContainer from '@/components/PledgeContainer';
 import { useWebSocket } from '@/hooks/use-websocket';
 import http from '@/lib/http';
 import { useWalletAddress } from 'bitcoin-wallet-adapter';
+import { formatUSDCompact } from '@/lib/format';
 import TestingBanner from '@/components/TestingBanner';
 
 export default function Home() {
@@ -37,7 +38,7 @@ export default function Home() {
         const flag = localStorage.getItem('testWalletConnected');
         setTestConnected(flag === 'true');
         console.log('[TestConnect][page] initial testWalletConnected =', flag);
-      } catch (_) {}
+      } catch (_) { }
 
       // React to header's test connect event and storage changes
       const updateFromLocalStorage = () => {
@@ -45,7 +46,7 @@ export default function Home() {
           const flag2 = localStorage.getItem('testWalletConnected');
           setTestConnected(flag2 === 'true');
           console.log('[TestConnect][page] updated testWalletConnected =', flag2);
-        } catch (_) {}
+        } catch (_) { }
       };
       const onTestConnect = () => updateFromLocalStorage();
       const onTestDisconnect = () => {
@@ -134,7 +135,33 @@ export default function Home() {
 
   // Null-safe derived values
   const totalTokensM = config?.totalTokens ? parseInt(config.totalTokens) / 1_000_000 : 0;
-  const currentMarketCapM = typeof currentMarketCap === 'number' ? (currentMarketCap / 1_000_000) : 0;
+  const currentMarketCapUSD = typeof currentMarketCap === 'number' ? currentMarketCap : 0;
+  const ceilingUSD = typeof ceilingMarketCap === 'number' && ceilingMarketCap > 0
+    ? ceilingMarketCap
+    : (config?.ceilingMarketCapUSD ? Number(config.ceilingMarketCapUSD) : 0);
+  // Compute Max Duration from DB-provided start/end when available; fallback to 72h
+  const getMaxDurationLabel = () => {
+    const anyState = auctionState as any;
+    const startMs: number | undefined =
+      (typeof anyState?.startTimeMs === 'number' ? anyState.startTimeMs : undefined) ??
+      (typeof anyState?.startTime === 'number' ? anyState.startTime : undefined) ??
+      (typeof anyState?.config?.startTimeMs === 'number' ? anyState.config.startTimeMs : undefined);
+    const endMs: number | undefined = typeof endTimeMs === 'number' ? endTimeMs : (typeof anyState?.endTimeMs === 'number' ? anyState.endTimeMs : undefined);
+
+    if (typeof startMs === 'number' && typeof endMs === 'number' && endMs > startMs) {
+      const totalMs = endMs - startMs;
+      const totalMinutes = Math.floor(totalMs / 60000);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
+      if (hours > 0) return `${hours}h`;
+      if (minutes > 0) return `${minutes}m`;
+      return '0m';
+    }
+    // Fallback to default 72h when start not provided by backend
+    return '72h';
+  };
+  const maxDurationLabel = getMaxDurationLabel();
 
   return (
     <div className="font-inter bg-dark-950 text-white overflow-x-hidden min-h-screen">
@@ -177,16 +204,16 @@ export default function Home() {
             </h1>
             <h2 className="text-2xl md:text-3xl font-bold text-gray-300 mb-2">First Come, First Served Auction</h2>
             <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-              Join the ADDERRELS token FCFS auction. {totalTokensM}M tokens available with a ceiling market cap of $15M.
+              Join the ADDERRELS token FCFS auction. {totalTokensM}M tokens available with a ceiling market cap of {formatUSDCompact(ceilingUSD)}.
             </p>
           </div>
 
           {/* Auction Stats */}
           <AuctionStats
             totalTokens={(totalTokensM).toString()}
-            ceilingMarketCap="15"
-            currentMarketCap={currentMarketCapM.toFixed(2)}
-            duration="72"
+            ceilingMarketCap={ceilingUSD}
+            currentMarketCap={currentMarketCapUSD}
+            duration={maxDurationLabel}
           />
 
           {/* Main Auction Interface */}
@@ -258,7 +285,7 @@ export default function Home() {
           <div className="glass-card bg-dark-900/70 backdrop-blur border border-white/10 rounded-t-2xl px-6 py-6">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 bg-gradient-to-r from-adderrels-500 to-adderrels-600 rounded-full p-1.5 overflow-hidden">
+                <div className="w-9 h-9 rounded-full border-2 border-orange-500 overflow-hidden">
                   <img src="/adderrel.png" alt="Adderrels" className="w-full h-full object-contain" />
                 </div>
                 <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-adderrels-400 to-adderrels-600 bg-clip-text text-transparent">

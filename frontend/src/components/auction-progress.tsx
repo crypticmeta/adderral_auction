@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CountdownTimer } from './countdown-timer';
 import { AuctionProgressProps } from '@shared/types/auction';
+import { formatBTC, formatUSD, formatUSDCompact, clampNumber } from '@/lib/format';
 
 export function AuctionProgress({
   timeRemaining,
@@ -16,8 +17,6 @@ export function AuctionProgress({
   currentPrice,
 }: AuctionProgressProps) {
   // Formatting helpers
-  const usdFmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
-  const btcFmt = new Intl.NumberFormat('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 8 });
   const clamp = (v: number, min: number, max: number) => (Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : 0);
 
   const hasHardCap = typeof hardCap === 'number' && !Number.isNaN(hardCap);
@@ -65,19 +64,23 @@ export function AuctionProgress({
             <>
               <span className="text-gray-400">BTC Raised</span>
               <span className="text-adderrels-400 font-semibold" data-testid="text-raised-amount">
-                {btcFmt.format(clamp(totalRaised ?? 0, 0, Number.POSITIVE_INFINITY))} / {hardCap && hardCap > 0 ? `${btcFmt.format(hardCap)} BTC` : 'No cap'}
+                {formatBTC(clampNumber(totalRaised ?? 0))} / {hardCap && hardCap > 0 ? `${formatBTC(hardCap)} BTC` : 'No cap'}
               </span>
             </>
           ) : (
             <>
               <span className="text-gray-400">Market Cap Progress</span>
-              <span className="text-adderrels-400 font-semibold" data-testid="text-market-cap-amount">
+              <span
+                className="text-adderrels-400 font-semibold"
+                data-testid="text-market-cap-amount"
+                title={`${formatUSD(currentMarketCap ?? 0)} / ${hasCapsUSD && ceilingMarketCap && ceilingMarketCap > 0 ? formatUSD(ceilingMarketCap) : '—'}`}
+              >
                 {currentMarketCap && currentMarketCap > 0
-                  ? `${usdFmt.format(currentMarketCap / 1)} (${(currentMarketCap / 1_000_000).toFixed(2)}M)`
-                  : usdFmt.format(0)}
+                  ? `${formatUSDCompact(currentMarketCap)}`
+                  : formatUSD(0)}
                 {' / '}
                 {hasCapsUSD && ceilingMarketCap && ceilingMarketCap > 0
-                  ? `${usdFmt.format(ceilingMarketCap / 1)} (${(ceilingMarketCap / 1_000_000).toFixed(2)}M)`
+                  ? `${formatUSDCompact(ceilingMarketCap)}`
                   : '—'}
               </span>
             </>
@@ -120,16 +123,16 @@ export function AuctionProgress({
         </div>
 
         <div className="flex justify-between text-xs text-gray-500 mt-2">
-          <span>{hasHardCap ? '0 BTC' : usdFmt.format(0)}</span>
+          <span>{hasHardCap ? '0 BTC' : formatUSD(0)}</span>
           <span data-testid="text-progress-percentage">
             {displayPct}% Complete
             {ceilingReached && <span className="text-amber-400 ml-1">(Ceiling Reached)</span>}
           </span>
           <span>
             {hasHardCap
-              ? hardCap && hardCap > 0 ? `${btcFmt.format(hardCap)} BTC` : 'No cap'
+              ? hardCap && hardCap > 0 ? `${formatBTC(hardCap)} BTC` : 'No cap'
               : hasCapsUSD && ceilingMarketCap && ceilingMarketCap > 0
-                ? `$${((ceilingMarketCap as number) / 1_000_000).toFixed(2)}M`
+                ? `${formatUSDCompact(ceilingMarketCap as number)}`
                 : '—'}
           </span>
         </div>
@@ -137,7 +140,7 @@ export function AuctionProgress({
         <div className="flex justify-between text-sm mt-4 mb-2">
           <span className="text-gray-400">BTC Raised</span>
           <span className="text-adderrels-400 font-semibold" data-testid="text-raised-amount">
-            {btcFmt.format(clamp(totalRaised ?? 0, 0, Number.POSITIVE_INFINITY))} BTC
+            {formatBTC(clampNumber(totalRaised ?? 0))} BTC
           </span>
         </div>
       </div>
