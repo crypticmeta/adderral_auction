@@ -26,18 +26,24 @@ Goals:
 ## 3) Automated Backend Tests
 
 Existing:
-- `src/tests/bitcoinPriceService.test.ts`: cache TTLs (short/long), live HTTP sources.
-- `src/tests/scheduledTasks.test.ts`: immediate refresh, warm-threshold, interval unref safety.
-- `src/tests/socketHandler.price.test.ts`: `priceError` semantics and computed fields.
+- [x] `src/tests/bitcoinPriceService.test.ts`: cache TTLs (short/long), live HTTP sources.
+- [x] `src/tests/scheduledTasks.test.ts`: immediate refresh, warm-threshold, interval unref safety.
+- [x] `src/tests/socketHandler.price.test.ts`: `priceError` semantics and computed fields.
 
 New (added):
-- `src/tests/statusRoutes.test.ts`: `GET /api/status` returns `{ network, testing, nodeEnv, btcUsd }` with btcUsd as number|null.
-- `src/tests/socketHandler.payload.test.ts`:
+- [x] `src/tests/statusRoutes.test.ts`: `GET /api/status` returns `{ network, testing, nodeEnv, btcUsd }` with btcUsd as number|null.
+- [x] `src/tests/socketHandler.payload.test.ts`:
   - Validates `auction_status` payload completeness: `id, totalTokens, ceilingMarketCap, currentMarketCap, refundedBTC, minPledge, maxPledge, startTime, endTime, serverTime, remainingTime, ceilingReached, currentPrice, priceError, pledges[]` (with user addresses).
   - Scenarios:
     - price available → `priceError=false`, computed fields > 0 as expected.
     - price unavailable → `priceError=true`, price-dependent fields zeroed.
     - ceiling reached → `ceilingReached=true` when `totalBTCPledged * price >= ceilingMarketCap`.
+ - [x] `src/tests/pledgeFlow.e2e.test.ts`:
+   - End-to-end pledge creation: `POST /api/pledges` → 201 with canonical `satsAmount` and `queuePosition`.
+   - Persists DB row (`Pledge`) with txid and wallet details; enqueues in Redis sorted set (`auction:pledge:queue`).
+   - Emits WS events: `pledge_created` and `pledge:queue:position`.
+   - Allows multiple pledges from same user (no unique constraint on `(userId, auctionId)`).
+   - Rejects 400 on missing required fields (null checks for `userId`, `satsAmount`, `walletDetails`, `txid`).
 
 Planned next tests (backend):
 - Pledge queue endpoints and limits:
