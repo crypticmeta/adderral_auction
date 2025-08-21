@@ -397,6 +397,10 @@ Refund mechanism:
 - `POST /api/auction/reset` - Dev-only auction reset: deletes pledges for the active auction and restarts it with a fresh 72h window; does not touch users
 - `POST /api/auction/reseed` - Dev-only full DB wipe + reseed: truncates `User`, `Auction`, `Pledge` and seeds admin, sample users, one active 24h auction targeting ~$1,000 (USD) using live BTC price to set dynamic `minPledgeSats`/`maxPledgeSats`, and 6–10 pledges totaling near the target.
 
+### Status
+- `GET /api/status` - Backend runtime status used by the frontend env guard.
+  - Response: `{ network: 'mainnet' | 'testnet', testing: boolean, nodeEnv: string }`
+
 ## WebSocket Messages
 
 ### Client to Server
@@ -416,6 +420,7 @@ Refund mechanism:
 - Next.js + TypeScript + TailwindCSS
 - Realtime via Socket.IO client
 - Uses `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL`
+- Env guard: compares `NEXT_PUBLIC_BTC_NETWORK` and `NEXT_PUBLIC_TESTING` with backend `/api/status`.
 
 ### Header Wallet Balance
 - The header (`frontend/src/components/Header.tsx`) shows the connected wallet's confirmed BTC balance and an approximate USD value.
@@ -425,6 +430,13 @@ Refund mechanism:
   - Uses network from `env.btcNetwork` (`NEXT_PUBLIC_BTC_NETWORK`).
   - Limits `supportedWallets` to `Unisat`, `Xverse`, `Leather` (Phantom excluded).
   - Optionally receives current balance for display.
+
+### Global Network Tag & Env Guard
+- Header shows a small tag with the current frontend network and testing flag (e.g. `mainnet TEST`).
+- A global guard component fetches backend status from `/api/status` and blocks the UI with a fullscreen warning if:
+  - Frontend `NEXT_PUBLIC_BTC_NETWORK` != backend `BTC_NETWORK`, or
+  - Frontend `NEXT_PUBLIC_TESTING` != backend `TESTING`.
+- Update envs to resolve and refresh the app.
 
 ### Reset DB Button (Dev-only)
 - `ResetDbButton.tsx` adds an AbortController with a 15s timeout for `/api/auction/reseed` to avoid hanging requests and shows a friendly timeout error.
@@ -462,6 +474,9 @@ NEXT_PUBLIC_TESTING=true
 - Prisma + Postgres
 - Redis (queue + Socket.IO adapter)
  - Jest + ts-jest for automated tests (Bitcoin Price Service, scheduler, WS emissions)
+- Exposes `/api/status` and reads:
+  - `BTC_NETWORK` (default: `mainnet`)
+  - `TESTING` (default: `false`)
 
 ## Testing
 

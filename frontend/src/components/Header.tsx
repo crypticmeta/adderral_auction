@@ -155,17 +155,20 @@ export default function Header() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-24 items-center justify-between">
           {/* Brand */}
-          <Link href="/" className="flex items-center gap-3">
-            {/* If the image is missing, fallback to text via alt */}
+          <Link href="/" className="flex items-center gap-3 group">
             <Image
               src="/adderrel.png"
-              alt="Adderrels"
               width={28}
               height={28}
-              className="rounded-md"
+              alt="Adderrels"
+              className="rounded-sm shadow-sm group-hover:scale-[1.02] transition-transform"
             />
             <span className="text-sm sm:text-base font-semibold tracking-wide">
               Adderrels Auction
+            </span>
+            <span className="hidden sm:inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] text-white/80">
+              {env.btcNetwork}
+              {env.testing ? <span className="ml-1 text-yellow-300">TEST</span> : null}
             </span>
           </Link>
 
