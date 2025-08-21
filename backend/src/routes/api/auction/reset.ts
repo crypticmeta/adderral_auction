@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../../../config/prisma';
 import { addHours } from 'date-fns';
-import { bitcoinPriceService } from '../../../services/bitcoinPriceService';
 
 // Extend Express Request type to include user property
 declare global {
@@ -38,20 +37,10 @@ export const verifyAdminAccess = async (req: Request, res: Response, next: NextF
  */
 export const reseedDb = async (_req: Request, res: Response) => {
   try {
-    // Get current BTC price (USD) to derive $1000 target in sats
-    let btcUsd = 0;
-    try {
-      btcUsd = await bitcoinPriceService.getBitcoinPrice();
-    } catch (e) {
-      // Fallback conservatively to avoid division by zero
-      btcUsd = 50000; // safe default; reseed remains functional
-    }
-    const targetUsd = 1000;
-    const targetBtc = targetUsd / btcUsd;
-    const targetSats = Math.max(50_000, Math.round(targetBtc * 1e8));
-    // Dynamic min/max sats chosen to allow multiple contributors to reach ~$1000 total
-    const minPledgeSats = Math.max(50_000, Math.round(targetSats / 20)); // ~5% of target
-    const maxPledgeSats = Math.max(minPledgeSats * 4, Math.round(targetSats / 2)); // up to ~50% of target
+    // Test-mode reseed params aligned with seed.ts
+    const minPledgeSats = 10_000;
+    const maxPledgeSats = 200_000;
+    const ceilingUsd = 5_000;
     // Truncate all core tables
     await prisma.$executeRawUnsafe('TRUNCATE TABLE "Pledge" CASCADE');
     await prisma.$executeRawUnsafe('TRUNCATE TABLE "Auction" CASCADE');
@@ -109,8 +98,8 @@ export const reseedDb = async (_req: Request, res: Response) => {
     const auction = await prisma.auction.create({
       data: {
         id: '3551190a-c374-4089-a4b0-35912e65ebdd',
-        totalTokens: 100000000,
-        ceilingMarketCap: targetUsd, // set demo ceiling to $1000
+        totalTokens: 10_000,
+        ceilingMarketCap: ceilingUsd, // demo ceiling $5k
         totalBTCPledged: 0,
         refundedBTC: 0,
         startTime: now,
@@ -123,12 +112,13 @@ export const reseedDb = async (_req: Request, res: Response) => {
       },
     });
 
-    // Seed 6–10 pledges totaling around targetSats
-    const contributorCount = Math.max(6, Math.min(10, testUsers.length));
+    // Seed 3–6 pledges centered around mid of [min,max]
+    const contributorCount = Math.max(3, Math.min(6, testUsers.length));
     const chosenUsers = testUsers.slice(0, contributorCount);
     // Generate random slices then scale to target
-    const randoms = chosenUsers.map(() => Math.random() + 0.5); // 0.5..1.5 range
+    const randoms = chosenUsers.map(() => Math.random() + 0.25); // 0.25..1.25 range
     const sumRand = randoms.reduce((a, b) => a + b, 0);
+    const targetSats = Math.round((minPledgeSats + maxPledgeSats) / 2) * contributorCount;
     let amounts = randoms.map(r => Math.round((r / sumRand) * targetSats));
     // Clamp within min/max and adjust to approximate targetSats
     amounts = amounts.map(a => Math.min(Math.max(a, minPledgeSats), maxPledgeSats));
@@ -167,8 +157,7 @@ export const reseedDb = async (_req: Request, res: Response) => {
       message: 'Database wiped and reseeded successfully',
       adminId: admin.id,
       auctionId: auction.id,
-      targetUsd,
-      btcUsd,
+      ceilingUsd,
       minPledgeSats,
       maxPledgeSats,
       totalPledgedBTC: totalPledgedBtc,
