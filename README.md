@@ -420,6 +420,17 @@ const { balance, btcPrice } = useWalletBalance();
 const confirmedBtc = balance?.confirmed ?? 0;
 ```
 
+### Global Testing Banner
+- A global testing banner is shown at the top of the homepage when `NEXT_PUBLIC_TESTING=true`.
+- Component: `frontend/src/components/TestingBanner.tsx`.
+- Rendered in `frontend/src/app/page.tsx` just below the background, above the main content.
+- Purpose: indicate sandbox mode; balances/data may be simulated.
+
+Enable it by adding to `frontend/.env.local` and rebuilding the frontend:
+```
+NEXT_PUBLIC_TESTING=true
+```
+
 ### Recent Activity / Pledge Queue UI
 
 - Random avatars per user via DiceBear seeded by their address/userId

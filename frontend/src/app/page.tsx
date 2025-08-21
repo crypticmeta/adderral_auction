@@ -7,9 +7,9 @@ import { AuctionProgress } from '@/components/auction-progress';
 import { RecentActivity } from '@/components/recent-activity';
 import PledgeContainer from '@/components/PledgeContainer';
 import { useWebSocket } from '@/hooks/use-websocket';
-import { ConnectMultiButton } from 'bitcoin-wallet-adapter';
 import http from '@/lib/http';
 import { useWalletAddress } from 'bitcoin-wallet-adapter';
+import TestingBanner from '@/components/TestingBanner';
 
 export default function Home() {
   // Derive wallet connection from adapter or testing localStorage
@@ -147,6 +147,13 @@ export default function Home() {
         <div className="absolute inset-0 gradient-bg opacity-95" />
         <div className="absolute inset-0 banner-overlay" />
       </div>
+
+      {/* Global Testing Banner */}
+      {isTesting && (
+        <div className="relative z-20 max-w-6xl mx-auto px-6 mt-2">
+          <TestingBanner />
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="relative z-10 min-h-screen pt-8 pb-16 section-gradient">
