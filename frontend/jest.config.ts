@@ -19,13 +19,6 @@ const config: Config = {
     '\\.(css|less|scss|sass)$': '<rootDir>/__mocks__/styleMock.js',
   },
   testPathIgnorePatterns: ['/node_modules/', '/.next/'],
-  // Silence Next.js dynamic imports warnings during tests
-  globals: {
-    'ts-jest': {
-      diagnostics: false,
-      isolatedModules: true,
-    },
-  },
 };
 
 export default config;

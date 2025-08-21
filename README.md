@@ -577,6 +577,28 @@ NEXT_PUBLIC_TESTING=true
   - Tests clean Redis keys and truncate tables between cases
  - Teardown stops containers automatically.
 
+### Frontend Jest + React Testing Library
+
+- Location: `frontend/src/__tests__/`
+- Runner: Jest (`jsdom` env) with RTL and `whatwg-fetch` polyfill.
+- Config: `frontend/jest.config.ts` (uses `ts-jest` transform with `isolatedModules`), setup at `frontend/jest.setup.ts`.
+- Path aliases supported: `@/` → `frontend/src/`, `@shared/` → `shared/`.
+
+Run:
+```bash
+cd frontend
+yarn test
+```
+
+Key UI test:
+- `frontend/src/__tests__/pledgeFlow.ui.test.tsx`
+  - Verifies pledge lifecycle across `PledgeQueue`, `RecentActivity`, and `AuctionStatus` reacting to mocked fetches and WebSocket events.
+  - Notes: advances fake timers (300ms debounce), scopes assertions with `within()` to the queue, and uses a mock socket exposed on `globalThis`.
+
+Env notes:
+- Tests do not require `NEXT_PUBLIC_API_URL`, but warnings may appear; harmless.
+- Wallet adapters are mocked; no browser wallet needed.
+
 ## Notes
 
 - Bitcoin price is fetched from multiple sources to ensure accuracy and resilience

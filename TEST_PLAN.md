@@ -1,4 +1,24 @@
 <!-- File: TEST_PLAN.md | Purpose: Concise, automation-first test plan (v1.0) for Adderrels Auction -->
+## 3.1) Automated Frontend Tests (Jest + RTL)
+
+Existing:
+- [x] `frontend/src/__tests__/pledgeFlow.ui.test.tsx`
+  - Verifies pledge lifecycle across `PledgeQueue`, `RecentActivity`, and `AuctionStatus` using mocked fetch and WebSocket.
+  - Uses fake timers to advance the 300ms debounce in `PledgeQueue` and `within()` to scope assertions.
+
+How to run:
+```bash
+cd frontend
+yarn test
+```
+
+Planned next tests (frontend):
+- PledgeQueue error/empty/loading states (API 500/timeout → user-friendly note; empty queue message).
+- RecentActivity rendering rules (max 10 items, sort by time, correct badges: In Queue/Processed/Confirmed).
+- AuctionStatus totals update on `auction_status` WS events and prop changes (null-safe rendering).
+- PledgeInterface validation (null checks, disable when `priceError=true`, balance gating, USD/BTC formatting).
+- Env guard banner behavior when frontend vs backend flags mismatch.
+
 
 # Test Plan v1.0 (Automation-first)
 
@@ -82,11 +102,18 @@ Planned next tests (backend):
 - Backend local: `yarn services:up` → set `DATABASE_URL`/`REDIS_URL` → `yarn prisma:generate && yarn prisma:migrate && yarn seed` → `yarn test:local` → `yarn services:down`.
 - Troubleshooting: `yarn test --detectOpenHandles` for leaked handles.
 
+Frontend:
+```bash
+cd frontend
+yarn test
+```
+
 ## 8) CI Criteria
 
 - All backend suites pass in ephemeral mode on clean environment.
 - Flake-free within 2 retries; no leaked handles.
 - Documentation parity: README reflects test modes and new test files.
+- Frontend Jest suite passes consistently (no act/timer leaks), stable across Node 20.
 - [ ] All pages/components render without crashing when data is null/missing
 - [ ] Network/API errors display user-friendly messages
 
