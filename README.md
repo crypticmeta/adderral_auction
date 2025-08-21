@@ -82,7 +82,7 @@ A new background task now verifies pledge txids against mempool.space and marks 
 - **Pledge UI: Wallet Balance Display**
   - `frontend/src/components/PledgeInterface.tsx` now shows connected wallet balance in BTC and approx USD using `useWalletBalance()` from `bitcoin-wallet-adapter`.
   - Added null checks, manual refresh, and disables pledging when input exceeds confirmed balance.
-  - Added a percentage slider with checkpoints at 25%, 50%, 75%, and 100% (100% leaves a 5,000 sats reserve for fees). The slider syncs with the BTC input and respects min/max pledge limits and available balance (testing uses demo balance).
+  - Added a percentage slider with checkpoints at 25%, 50%, 75%, and 100% (100% leaves a 10,000 sats reserve for fees). The slider syncs with the BTC input and respects min/max pledge limits and available balance (testing uses demo balance).
   - BTC Amount field now also shows the USD equivalent of the entered BTC using the live BTC price (hidden when price unavailable).
 - **Removed Demo/Mock Code (Frontend)**
   - Eliminated mock verification flow from `frontend/src/components/PledgeForm.tsx`.
@@ -91,9 +91,10 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Ensured null-safety and production-ready UI copy (no demo/preview mentions).
 
 - **Pledge pay-first flow (Frontend)**
-  - `PledgeForm.tsx` integrates `usePayBTC()` from `bitcoin-wallet-adapter`.
-  - Flow: fetch deposit address → `payBTC({ address, amount, network })` → obtain `txid` from wallet → `POST /api/pledges` with `txid` and `depositAddress`.
-  - Robust null checks; pledge creation is blocked if wallet does not return a `txid`.
+  - `PledgeForm.tsx` and `PledgeInterface.tsx` both use `usePayBTC()` from `bitcoin-wallet-adapter`.
+  - Flow: fetch deposit address → `payBTC({ address, amount, network })` (testing simulates) → obtain `txid` → `POST /api/pledges` with `txid` and `depositAddress`.
+  - Testing mode: `PledgeInterface.tsx` simulates payment by introducing a random 0.3–2.0s delay and generating a fake txid (`test-<ts>-<randhex>`) to enable load testing.
+  - Robust null checks; pledge creation is blocked if wallet does not return a `txid` (non-testing).
   - Testing mode remains unchanged and may bypass real payment.
 
 - **Public Stats Page + Endpoint**

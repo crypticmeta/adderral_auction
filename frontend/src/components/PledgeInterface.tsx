@@ -1,10 +1,11 @@
 // File: PledgeInterface.tsx - Modern pledge UI; disables when BTC price unavailable or wallet not connected. Shows wallet BTC/USD balance. Testing mode shows demo $100k USD-equivalent balance; verification handled on backend.
 // Update: Added pledge amount slider with 25/50/75/100% checkpoints (100% leaves 10,000 sats for fees). Syncs with input.
 // Update: Displays USD equivalent of entered BTC pledge using live BTC price (with null checks).
-// Note: Builds CreatePledgeRequest with canonical satsAmount (BTC optional for back-compat). This UI does not initiate payment; non-testing pledges will fail without txid.
+// Update: Adopted pay-first flow: fetch deposit address, perform wallet payment to get txid, then create pledge with txid.
+// Testing mode: simulates payment by delaying randomly (0.3s–2s) and generating a fake txid for load testing.
 import React, { useEffect, useMemo, useState } from 'react';
 import type { WalletDetails, CreatePledgeRequest } from '@shared/types/common';
-import { useWalletBalance } from 'bitcoin-wallet-adapter';
+import { useWalletBalance, usePayBTC } from 'bitcoin-wallet-adapter';
 import { useWebSocket } from '@/hooks/use-websocket';
 
 interface PledgeInterfaceProps {
@@ -67,6 +68,27 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
     return cleanup;
   }, [auctionId, apiUrl]);
 
+  // Fetch deposit address with simple retry for transient errors
+  const fetchDepositAddressWithRetry = async (
+    retries = 1,
+    delayMs = 500
+  ): Promise<{ depositAddress: string | null; network?: string | null; }> => {
+    try {
+      const res = await fetch(`${apiUrl}/api/pledges/deposit-address`);
+      if (!res.ok) {
+        throw new Error(`Status ${res.status}`);
+      }
+      const data = await res.json();
+      return { depositAddress: data?.depositAddress ?? null, network: data?.network ?? null };
+    } catch (e) {
+      if (retries > 0) {
+        await new Promise(r => setTimeout(r, delayMs));
+        return fetchDepositAddressWithRetry(retries - 1, delayMs * 2);
+      }
+      throw e;
+    }
+  };
+
   // Wallet balance (BTC) and price (USD per BTC)
   const {
     balance,
@@ -77,6 +99,25 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
     formatBalance,
     convertToUSD,
   } = useWalletBalance();
+
+  // Wallet pay function (real mode)
+  const { payBTC } = (usePayBTC?.() as any) || {};
+
+  // Safe random hex generator for testing-mode txid
+  const genRandHex = (bytes = 8) => {
+    try {
+      const g = (globalThis as any)?.crypto || (typeof window !== 'undefined' ? (window as any).crypto : undefined);
+      if (g && typeof g.getRandomValues === 'function') {
+        const arr = new Uint8Array(bytes);
+        g.getRandomValues(arr);
+        return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+    } catch { /* noop */ }
+    // Fallback
+    let out = '';
+    for (let i = 0; i < bytes; i++) out += Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
+    return out;
+  };
 
   const confirmedBtc = useMemo(() => {
     const v = typeof balance?.confirmed === 'number' ? balance.confirmed : 0;
@@ -253,15 +294,45 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
       };
       // Compute canonical sats amount from BTC
       const sats = Math.max(0, Math.round((Number.isFinite(amount) ? amount : 0) * 1e8));
-      // Local payload type: txid optional here since this UI doesn't initiate payment
-      type LocalCreatePledge = Omit<CreatePledgeRequest, 'txid'> & { txid?: string };
-      const payload: LocalCreatePledge = {
-        // Prefer wallet cardinal address as the user identifier; fallback to guestId
+      // Pay-first flow: fetch deposit address, perform payment (or simulate), then create pledge with txid
+      const addrData = await fetchDepositAddressWithRetry(1, 500);
+      const depositAddress: string | null = addrData?.depositAddress ?? null;
+      const network: string = (addrData?.network as string) || 'mainnet';
+      if (!depositAddress) {
+        throw new Error('Failed to obtain deposit address');
+      }
+
+      // Obtain txid: real wallet in prod, simulated in testing
+      let txFromPay: string | undefined;
+      if (isTesting) {
+        const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+        const jitterMs = Math.floor(300 + Math.random() * 1700); // 0.3s - 2.0s
+        await sleep(jitterMs);
+        const randHex = genRandHex(8);
+        txFromPay = `test-${Date.now().toString(16)}-${randHex}`;
+      } else {
+        if (typeof payBTC !== 'function') {
+          throw new Error('Wallet payment function unavailable.');
+        }
+        try {
+          const payRes = await payBTC({ address: depositAddress, amount: sats, network });
+          txFromPay = payRes?.txid || payRes?.txId || payRes?.transactionId;
+        } catch (payErr: any) {
+          const msg = payErr?.message || payErr?.error || 'Payment failed or was rejected.';
+          throw new Error(msg);
+        }
+      }
+
+      if (!txFromPay) {
+        throw new Error('Payment sent but no txid was returned.');
+      }
+
+      const payload: CreatePledgeRequest = {
         userId: (walletAddress && walletAddress.length > 0) ? walletAddress : guestId,
         satsAmount: sats,
         walletDetails,
-        // Note: This UI does not trigger payment; include txid only in testing to satisfy backend contract
-        ...(isTesting ? { txid: 'testing-txid' } : {}),
+        txid: txFromPay,
+        depositAddress,
       };
 
       const res = await fetch(`${apiUrl}/api/pledges`, {
