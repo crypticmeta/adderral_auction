@@ -5,6 +5,7 @@
 
 import { Redis } from 'ioredis';
 import config from './config';
+import { logger } from '../utils/logger';
 
 // Create Redis client
 // Prefer full REDIS_URL when available to avoid localhost defaults in containers
@@ -17,12 +18,16 @@ const redisClient = config.redis?.url
     });
 
 redisClient.on('error', (err) => {
-  console.error('Redis connection error:', err);
+  logger.error('Redis connection error:', err);
 });
 
-redisClient.on('connect', () => {
-  console.log('Connected to Redis server');
-});
+// Avoid noisy connect logs in Jest (they can fire after teardown and trigger warnings)
+const isTestRun = process.env.NODE_ENV === 'test' || !!process.env.JEST_WORKER_ID;
+if (!isTestRun) {
+  redisClient.on('connect', () => {
+    logger.info('Connected to Redis server');
+  });
+}
 
 // Export both as default and named export for flexibility
 export { redisClient };

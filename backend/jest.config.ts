@@ -8,7 +8,7 @@ const config: Config = {
   testMatch: ['<rootDir>/src/tests/**/*.test.ts'],
   moduleFileExtensions: ['ts', 'js', 'json'],
   clearMocks: true,
-  verbose: false,
+  verbose: true,
   // Resolve TS paths simply within backend/src
   moduleDirectories: ['node_modules', '<rootDir>/src'],
   // Use real Postgres and Redis via Testcontainers

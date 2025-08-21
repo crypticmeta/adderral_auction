@@ -1,4 +1,5 @@
-// File: backend/src/tests/setup/testcontainers.setup.ts | Purpose: Global setup to start Postgres and Redis via Testcontainers and prepare Prisma schema
+// File: backend/src/tests/setup/testcontainers.setup.ts | Purpose: Global setup to start Postgres and Redis via Testcontainers and prepare Prisma schema.
+// Supports hybrid mode: if USE_LOCAL_SERVICES=true and DATABASE_URL/REDIS_URL are provided, containers are skipped.
 import { StartedTestContainer, GenericContainer, Wait } from 'testcontainers';
 import { exec as execCb } from 'child_process';
 import { promisify } from 'util';
@@ -10,6 +11,17 @@ let postgres: StartedTestContainer | null = null;
 let redis: StartedTestContainer | null = null;
 
 export default async function globalSetup() {
+  // Hybrid: allow opting into already-running local services
+  const useLocal = process.env.USE_LOCAL_SERVICES === 'true';
+  const hasExternalUrls = !!process.env.DATABASE_URL && (!!process.env.REDIS_URL || (!!process.env.REDIS_HOST && !!process.env.REDIS_PORT));
+  if (useLocal && hasExternalUrls) {
+    console.log('[setup] USE_LOCAL_SERVICES=true detected; skipping Testcontainers startup.');
+    console.log('[setup] Using provided DATABASE_URL and REDIS configuration.');
+    // In local mode we assume DB is migrated; do not run prisma generate/migrate.
+    (global as any).__TESTCONTAINERS__ = undefined;
+    return;
+  }
+
   // Increase verbosity for Testcontainers
   process.env.DEBUG = process.env.DEBUG ? `${process.env.DEBUG},testcontainers*` : 'testcontainers*';
   console.log('[setup] Starting global setup for Testcontainers...');

@@ -1,5 +1,7 @@
-// File: PledgeInterface.tsx - Modern pledge UI; disables when BTC price unavailable or wallet not connected. Shows wallet BTC/USD balance.
+// File: PledgeInterface.tsx - Modern pledge UI; disables when BTC price unavailable or wallet not connected. Shows wallet BTC/USD balance. Testing mode shows demo $100k USD-equivalent balance; verification handled on backend.
+// Note: Builds CreatePledgeRequest with canonical satsAmount (BTC optional for back-compat). This UI does not initiate payment; non-testing pledges will fail without txid.
 import React, { useEffect, useMemo, useState } from 'react';
+import type { WalletDetails, CreatePledgeRequest } from '@shared/types/common';
 import { useWalletBalance } from 'bitcoin-wallet-adapter';
 import { useWebSocket } from '@/hooks/use-websocket';
 
@@ -25,6 +27,7 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
   const { auctionState } = useWebSocket();
   const auctionId = auctionState?.id as string | undefined;
+  const isTesting = process.env.NEXT_PUBLIC_TESTING === 'true';
 
   // Backend BTC price
   const [backendPrice, setBackendPrice] = useState<number | null>(null);
@@ -79,6 +82,15 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
     return Number.isFinite(p) ? p : 0;
   }, [btcPrice, backendPrice]);
 
+  // Testing-mode: compute demo BTC balance from $100,000 USD
+  const demoMaxBtc = useMemo(() => {
+    if (!isTesting) return 0;
+    const price = priceUsd;
+    if (!price || price <= 0) return 0;
+    const btc = 100_000 / price;
+    return Number.isFinite(btc) ? btc : 0;
+  }, [isTesting, priceUsd]);
+
   const usdBalance = useMemo(() => {
     // Prefer backend conversion first
     if (priceUsd > 0) return confirmedBtc * priceUsd;
@@ -102,8 +114,9 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
     const amt = parseFloat(pledgeAmount || '');
     if (!isWalletConnected) return false; // don't show error when not connected
     if (!pledgeAmount || isNaN(amt)) return false;
+    if (isTesting && demoMaxBtc > 0) return amt > demoMaxBtc;
     return amt > confirmedBtc;
-  }, [pledgeAmount, confirmedBtc, isWalletConnected]);
+  }, [pledgeAmount, confirmedBtc, isWalletConnected, isTesting, demoMaxBtc]);
 
   const handlePledge = async () => {
     setMessage(null);
@@ -114,23 +127,55 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
     }
 
     const amount = parseFloat(pledgeAmount);
-    if (isNaN(amount) || (minPledge && amount < minPledge) || (maxPledge && amount > maxPledge)) {
+    if (Number.isNaN(amount) || (minPledge && amount < minPledge) || (maxPledge && amount > maxPledge)) {
       setMessage({ type: 'error', title: 'Invalid amount', description: `Pledge amount must be between ${minPledge} and ${maxPledge} BTC` });
       return;
     }
 
     try {
       setIsPending(true);
-      const token = typeof window !== 'undefined' ? localStorage.getItem('guestToken') : null;
-      if (!token) throw new Error('Authentication token not found');
+      // Ensure we have a guestId; auto-fetch if missing
+      let guestId = typeof window !== 'undefined' ? localStorage.getItem('guestId') : null;
+      if (!guestId) {
+        try {
+          const r = await fetch(`${apiUrl}/api/auth/guest-id`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+          if (r.ok) {
+            const j = await r.json().catch(() => null) as { guestId?: string } | null;
+            if (j?.guestId) {
+              guestId = j.guestId;
+              try { if (typeof window !== 'undefined') localStorage.setItem('guestId', guestId); } catch { /* noop */ }
+            }
+          }
+        } catch { /* noop */ }
+      }
+      if (!guestId) throw new Error('Guest ID not found');
 
-      const res = await fetch(`${apiUrl}/api/auction/pledge`, {
+      // Build payload expected by backend createPledge
+      const walletDetails: WalletDetails = {
+        cardinal: walletAddress ?? '',
+        ordinal: '',
+        cardinalPubkey: '',
+        ordinalPubkey: '',
+        wallet: 'Unknown',
+        connected: !!isWalletConnected,
+      };
+      // Compute canonical sats amount from BTC
+      const sats = Math.max(0, Math.round((Number.isFinite(amount) ? amount : 0) * 1e8));
+      // Local payload type: txid optional here since this UI doesn't initiate payment
+      type LocalCreatePledge = Omit<CreatePledgeRequest, 'txid'> & { txid?: string };
+      const payload: LocalCreatePledge = {
+        // Prefer wallet cardinal address as the user identifier; fallback to guestId
+        userId: (walletAddress && walletAddress.length > 0) ? walletAddress : guestId,
+        satsAmount: sats,
+        walletDetails,
+        // Note: This UI does not trigger payment; include txid only in testing to satisfy backend contract
+        ...(isTesting ? { txid: 'testing-txid' } : {}),
+      };
+
+      const res = await fetch(`${apiUrl}/api/pledges`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ btcAmount: amount, walletAddress }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -138,14 +183,19 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
         throw new Error(err?.message || 'Failed to create pledge');
       }
 
+      const data = await res.json().catch(() => null) as { id?: string } | null;
       setMessage({ type: 'success', title: 'Pledge submitted!', description: 'Your pledge has been submitted successfully' });
       setPledgeAmount('');
+
+      // Frontend no longer auto-verifies in testing; backend handles verification.
     } catch (e: any) {
       setMessage({ type: 'error', title: 'Pledge failed', description: String(e?.message || 'There was an error processing your pledge') });
     } finally {
       setIsPending(false);
     }
   };
+
+  // No auto-verify timers on frontend; no cleanup required.
 
   const disabled = !isWalletConnected || isPending || !pledgeAmount;
   const isDisabled = disabled || exceedsBalance;
@@ -181,14 +231,22 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
         <div className="bg-dark-800/50 p-4 rounded-xl mb-6 border border-gray-700">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-400 text-sm">Your Balance</p>
+              <p className="text-gray-400 text-sm">Your Balance{isTesting ? ' (Testing)' : ''}</p>
               <p className="text-cyan-400 font-semibold">
-                {isLoading ? 'Loading…' : (formatBalance ? formatBalance(confirmedBtc) : `${confirmedBtc} BTC`)}
+                {isTesting
+                  ? (demoMaxBtc > 0
+                    ? `${demoMaxBtc.toFixed(6)} BTC`
+                    : 'Loading…')
+                  : (isLoading
+                    ? 'Loading…'
+                    : (formatBalance ? formatBalance(confirmedBtc) : `${confirmedBtc} BTC`))}
                 <span className="text-gray-400 text-xs ml-2">
                   {isWalletConnected
-                    ? (usdBalance !== null
+                    ? (isTesting && demoMaxBtc > 0
+                      ? '(Testing demo balance = $100,000)'
+                      : (!isTesting && usdBalance !== null
                         ? `(~$${usdBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })})`
-                        : (priceLoading ? 'Fetching USD price…' : 'USD price unavailable'))
+                        : (priceLoading ? 'Fetching USD price…' : 'USD price unavailable')))
                     : ''}
                 </span>
               </p>
@@ -223,7 +281,9 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">BTC</span>
         </div>
         {exceedsBalance && (
-          <p className="mt-2 text-sm text-red-300">Amount exceeds your confirmed wallet balance.</p>
+          <p className="mt-2 text-sm text-red-300">
+            {isTesting ? 'Amount exceeds your testing demo balance.' : 'Amount exceeds your confirmed wallet balance.'}
+          </p>
         )}
       </div>
 

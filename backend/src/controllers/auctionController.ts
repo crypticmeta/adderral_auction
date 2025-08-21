@@ -4,16 +4,14 @@
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient } from '../generated/prisma';
+import prisma from '../config/prisma';
 import { Server } from 'socket.io';
-import { AuctionType, MultiWalletData } from '../types';
-import { BitcoinWalletService } from '../services/bitcoinWalletService';
+import type { AuctionType, MultiWalletData } from '@shared/types';
 import { bitcoinPriceService } from '../services/bitcoinPriceService';
 import { redisClient } from '../config/redis';
 import { addHours } from 'date-fns';
 
-const prisma = new PrismaClient();
-const bitcoinWalletService = BitcoinWalletService.getInstance();
+// Prisma client provided by singleton
 
 // Store the Socket.IO server instance
 let io: Server;
@@ -244,124 +242,68 @@ export const updateAuctionStatus = async (req: Request, res: Response) => {
 
 // Using MultiWalletData from centralized types
 
-// Connect wallet
-export const connectWallet = async (req: Request, res: Response) => {
+// Single-wallet connect endpoint removed. Use connectMultiWallet instead.
+
+// Connect multi-wallet
+export const connectMultiWallet = async (req: Request, res: Response) => {
   try {
-    const { userId, btcAddress, network, publicKey, signature } = req.body;
-    
-    if (!userId || !btcAddress || !publicKey) {
-      return res.status(400).json({ message: 'User ID, BTC address, and public key are required' });
-    }
-    
-    // Verify wallet ownership (in a real implementation, this would verify the signature)
-    const message = 'Verify wallet ownership for Adderrels Auction';
-    const isWalletVerified = await bitcoinWalletService.verifyWalletOwnership(
+    // Accept broader metadata from adapter
+    const {
+      userId,
       btcAddress,
-      signature || '',
-      message
-    );
-    
-    if (!isWalletVerified) {
-      return res.status(400).json({ message: 'Wallet ownership verification failed' });
+      taprootAddress,
+      network,
+      publicKey,          // cardinal pubkey
+      ordinalPubKey,      // optional: taproot pubkey
+      wallet,             // wallet provider name
+      signature,          // auth signature
+      message             // signed message
+    } = req.body as any;
+
+    if (!userId || !btcAddress || !taprootAddress || !publicKey) {
+      return res.status(400).json({
+        message: 'User ID, BTC address, Taproot address, and public key are required'
+      });
     }
-    
-    // Update user with wallet info
-    const user = await prisma.user.update({
+
+    // Signature verification removed per product decision; proceed without verification
+
+    // Ensure user exists
+    const existing = await prisma.user.findUnique({ where: { id: userId } });
+    if (!existing) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Always upsert both addresses and metadata
+    const updated = await prisma.user.update({
       where: { id: userId },
       data: {
         cardinal_address: btcAddress,
+        ordinal_address: taprootAddress,
         cardinal_pubkey: publicKey,
-        network: network || 'mainnet',
+        ordinal_pubkey: ordinalPubKey ?? existing.ordinal_pubkey ?? null,
+        wallet: wallet ?? existing.wallet ?? 'multi',
+        signature: signature ?? existing.signature ?? null,
+        message: message ?? existing.message ?? null,
+        network: network ?? existing.network ?? 'mainnet',
         connected: true
       },
       select: {
         id: true,
         cardinal_address: true,
-        cardinal_pubkey: true,
-        network: true
-      }
-    });
-    
-    res.status(200).json({
-      id: user.id,
-      cardinal_address: user.cardinal_address,
-      cardinal_pubkey: user.cardinal_pubkey,
-      network: user.network
-    });
-  } catch (error) {
-    console.error('Connect wallet error:', error);
-    res.status(500).json({ message: 'Server error connecting wallet' });
-  }
-};
-
-// Connect multi-wallet
-export const connectMultiWallet = async (req: Request, res: Response) => {
-  try {
-    const { userId, btcAddress, taprootAddress, network, publicKey, signature } = req.body as MultiWalletData;
-    
-    // Validate required fields
-    if (!userId || !btcAddress || !taprootAddress || !publicKey) {
-      return res.status(400).json({ 
-        message: 'User ID, BTC address, Taproot address, and public key are required' 
-      });
-    }
-    
-    // Verify wallet ownership
-    const message = 'Verify multi-wallet ownership for Adderrels Auction';
-    const isWalletVerified = await bitcoinWalletService.verifyWalletOwnership(
-      btcAddress,
-      signature || '',
-      message
-    );
-    
-    if (!isWalletVerified) {
-      return res.status(400).json({ message: 'Multi-wallet ownership verification failed' });
-    }
-    
-    // Update user with wallet info if not already connected
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        cardinal_address: true,
         ordinal_address: true,
         cardinal_pubkey: true,
+        ordinal_pubkey: true,
         wallet: true,
         network: true,
-        connected: true,
-      },
+        connected: true
+      }
     });
-    
-    if (user && !user.cardinal_address) {
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          cardinal_address: btcAddress,
-          ordinal_address: taprootAddress,
-          cardinal_pubkey: publicKey,
-          wallet: 'multi',
-          network,
-          connected: true,
-        },
-      });
-    }
-    
-    // Return updated user data
-    if (user) {
-      res.status(200).json({
-        id: user.id,
-        cardinal_address: user.cardinal_address,
-        ordinal_address: user.ordinal_address,
-        cardinal_pubkey: user.cardinal_pubkey,
-        wallet: user.wallet,
-        network: user.network
-      });
-    } else {
-      res.status(404).json({ message: 'User not found' });
-    }
+
+    return res.status(200).json(updated);
   } catch (error) {
     console.error('Connect multi-wallet error:', error);
-    res.status(500).json({ message: 'Server error connecting multi-wallet' });
+    return res.status(500).json({ message: 'Server error connecting multi-wallet' });
   }
 };
 
@@ -369,7 +311,11 @@ export const connectMultiWallet = async (req: Request, res: Response) => {
 export const getAuctionPledges = async (req: Request, res: Response) => {
   try {
     const { auctionId } = req.params;
-    
+
+    if (!auctionId) {
+      return res.status(400).json({ message: 'Auction ID is required' });
+    }
+
     const pledges = await prisma.pledge.findMany({
       where: { auctionId },
       include: {
@@ -381,17 +327,47 @@ export const getAuctionPledges = async (req: Request, res: Response) => {
             cardinal_pubkey: true,
             ordinal_pubkey: true,
             wallet: true,
-            network: true
-          }
-        }
+            network: true,
+          },
+        },
       },
-      orderBy: { timestamp: 'desc' }
+      orderBy: { timestamp: 'desc' },
     });
-    
-    res.status(200).json(pledges);
+
+    // Normalize response: include btcAmount derived from satAmount, guard nulls
+    const normalized = pledges.map((p: any) => {
+      const satAmount = Number(p?.satAmount ?? 0);
+      const btcAmount = satAmount / 1e8;
+      return {
+        id: p.id,
+        auctionId: p.auctionId,
+        userId: p.userId,
+        satAmount,
+        btcAmount,
+        depositAddress: p?.depositAddress ?? null,
+        txid: p?.txid ?? null,
+        confirmations: Number(p?.confirmations ?? 0),
+        verified: Boolean(p?.verified ?? false),
+        status: p?.status ?? null,
+        timestamp: p?.timestamp ?? null,
+        user: p?.user
+          ? {
+              id: p.user.id,
+              cardinal_address: p.user.cardinal_address ?? null,
+              ordinal_address: p.user.ordinal_address ?? null,
+              cardinal_pubkey: p.user.cardinal_pubkey ?? null,
+              ordinal_pubkey: p.user.ordinal_pubkey ?? null,
+              wallet: p.user.wallet ?? null,
+              network: p.user.network ?? null,
+            }
+          : null,
+      };
+    });
+
+    return res.status(200).json(normalized);
   } catch (error) {
     console.error('Get auction pledges error:', error);
-    res.status(500).json({ message: 'Server error retrieving pledges' });
+    return res.status(500).json({ message: 'Server error retrieving pledges' });
   }
 };
 
@@ -479,8 +455,13 @@ export const getUserAllocation = async (req: Request, res: Response) => {
 // Get auction statistics
 export const getAuctionStats = async (req: Request, res: Response) => {
   try {
-    const { auctionId } = req.params;
-    
+    // Support both route patterns: "/:id/stats" and "/:auctionId/stats"
+    const auctionId = (req?.params?.auctionId ?? req?.params?.id ?? '').toString();
+
+    if (!auctionId) {
+      return res.status(400).json({ message: 'Auction ID is required' });
+    }
+
     const auction = await prisma.auction.findUnique({
       where: { id: auctionId },
       include: {

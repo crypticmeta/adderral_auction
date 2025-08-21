@@ -6,20 +6,19 @@
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
-import { Server } from 'socket.io';
 import config from './config/config';
 import authRoutes from './routes/authRoutes';
 import auctionRoutes from './routes/auctionRoutes';
 import pledgeRoutes from './routes/pledgeRoutes';
+import statusRoutes from './routes/statusRoutes';
 import { initializeSocketIO } from './websocket/socketHandler';
 import { setSocketServer } from './controllers/pledgeController';
 import { setSocketServer as setAuctionSocketServer } from './controllers/auctionController';
-import { PrismaClient } from './generated/prisma';
+import prisma from './config/prisma';
 import { startAuctionTimeCheck, startBitcoinPriceRefresh, startTxConfirmationChecks } from './services/scheduledTasks';
 import './config/redis'; // Initialize Redis connection
 
-// Initialize Prisma client
-const prisma = new PrismaClient();
+// Prisma client is initialized via singleton in config/prisma
 
 // Create Express app and HTTP server
 const app = express();
@@ -48,6 +47,7 @@ startTxConfirmationChecks(io);
 app.use('/api/auth', authRoutes);
 app.use('/api/auction', auctionRoutes);
 app.use('/api/pledges', pledgeRoutes);
+app.use('/api/status', statusRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {

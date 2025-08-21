@@ -16,6 +16,10 @@ export default {
   nodeEnv: process.env.NODE_ENV || 'development',
   // Testing mode: enables random confirmation results in tx checker
   testing: process.env.TESTING === 'true',
+  // Bitcoin network for backend (must match frontend)
+  btcNetwork: (process.env.BTC_NETWORK || 'mainnet') as 'mainnet' | 'testnet',
+  // Single deposit address used for all pledges (set via env)
+  depositAddress: process.env.BTC_DEPOSIT_ADDRESS || '',
   // Mempool API bases
   mempool: {
     mainnetBase: process.env.MEMPOOL_MAINNET_BASE || 'https://mempool.space/api',

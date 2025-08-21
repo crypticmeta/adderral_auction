@@ -1,9 +1,7 @@
-/**
- * Centralized type definitions for the adderrels-auction backend
- * Updated: pledge amounts stored as sats (satAmount) and address fields renamed
- */
+// Shared backend model types
+// Mirrors backend DB-layer interfaces so both backend and frontend can reference shapes consistently.
 
-// Pledge related types
+// Pledge stored in DB (sats as source of truth)
 export interface PledgeType {
   id: string;
   userId: string;
@@ -23,7 +21,7 @@ export interface PledgeType {
   ordinal_address: string | null;
 }
 
-// Queue related types
+// Queue item used by Redis-based pledge processor
 export interface QueuedPledge {
   id: string;
   userId: string;
@@ -36,7 +34,7 @@ export interface QueuedPledge {
   needsRefund?: boolean;
 }
 
-// Auction related types (min/max in sats)
+// Auction model (min/max in sats)
 export interface AuctionType {
   id: string;
   totalTokens: number;
@@ -51,7 +49,7 @@ export interface AuctionType {
   maxPledgeSats: number;
 }
 
-// User related types
+// User model subset used by services/controllers
 export interface UserType {
   id: string;
   cardinal_address?: string | null;
@@ -66,7 +64,7 @@ export interface UserType {
   createdAt: Date;
 }
 
-// Refunded pledge related types
+// Refunded pledge record
 export interface RefundedPledgeType {
   id: string;
   userId: string;
@@ -79,7 +77,7 @@ export interface RefundedPledgeType {
   refunded: boolean;
 }
 
-// MultiWallet data interface
+// Multi-wallet data for linking user addresses
 export interface MultiWalletData {
   userId: string;
   btcAddress: string;

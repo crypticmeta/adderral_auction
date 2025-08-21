@@ -1,31 +1,8 @@
 // Auction progress component showing time remaining and an animated, shimmering progress bar that reacts to live pledges
 import React, { useEffect, useRef, useState } from 'react';
 import { CountdownTimer } from './countdown-timer';
-
-interface TimeRemaining {
-  hours: number;
-  minutes: number;
-  seconds: number;
-}
-
-interface AuctionProgressProps {
-  timeRemaining: TimeRemaining;
-  totalRaised: number; // in BTC
-  // Optional: hard cap in BTC for raised progress computation
-  hardCap?: number;
-  // Synchronized timing fields (ms since epoch)
-  endTimeMs?: number;
-  serverTimeMs?: number;
-
-  // Optional auxiliary fields (may be undefined depending on data source)
-  refundedBTC?: number;
-  currentMarketCap?: number; // in USD
-  ceilingMarketCap?: number; // in USD
-  ceilingReached?: boolean;
-
-  progressPercentage: number;
-  currentPrice: number; // token price in USD (or unit)
-}
+import { AuctionProgressProps } from '@shared/types/auction';
+import { formatBTC, formatUSD, formatUSDCompact, clampNumber } from '@/lib/format';
 
 export function AuctionProgress({
   timeRemaining,
@@ -33,29 +10,38 @@ export function AuctionProgress({
   hardCap,
   endTimeMs,
   serverTimeMs,
-  refundedBTC = 0,
   currentMarketCap,
   ceilingMarketCap,
   ceilingReached = false,
   progressPercentage,
   currentPrice,
 }: AuctionProgressProps) {
+  // Formatting helpers
+  const clamp = (v: number, min: number, max: number) => (Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : 0);
+
   const hasHardCap = typeof hardCap === 'number' && !Number.isNaN(hardCap);
   const hasCapsUSD = typeof ceilingMarketCap === 'number' && !Number.isNaN(ceilingMarketCap);
 
   // Animate on progress increase (live pledges)
   const [bump, setBump] = useState(false);
   const prevPctRef = useRef<number>(0);
-  const clampedPct = Math.max(0, Math.min(100, progressPercentage ?? 0));
+  const clampedPct = clamp(progressPercentage ?? 0, 0, 100);
+  const displayPct = clamp(Number(clampedPct.toFixed(1)), 0, 100);
+
+  const BUMP_THRESHOLD = 0.05; // percent points
+  const BUMP_DURATION_MS = 450;
 
   useEffect(() => {
     const prev = prevPctRef.current;
-    if (clampedPct > prev + 0.05) {
+    if (clampedPct > prev + BUMP_THRESHOLD) {
       setBump(true);
-      const t = setTimeout(() => setBump(false), 450);
-      return () => clearTimeout(t);
+      const t = setTimeout(() => setBump(false), BUMP_DURATION_MS);
+      return () => {
+        clearTimeout(t);
+        prevPctRef.current = clampedPct;
+      };
     }
-    // Always update
+    // Always update reference
     prevPctRef.current = clampedPct;
   }, [clampedPct]);
 
@@ -78,20 +64,24 @@ export function AuctionProgress({
             <>
               <span className="text-gray-400">BTC Raised</span>
               <span className="text-adderrels-400 font-semibold" data-testid="text-raised-amount">
-                {(totalRaised ?? 0).toFixed(3)} / {hardCap!.toFixed(3)} BTC
+                {formatBTC(clampNumber(totalRaised ?? 0))} / {hardCap && hardCap > 0 ? `${formatBTC(hardCap)} BTC` : 'No cap'}
               </span>
             </>
           ) : (
             <>
               <span className="text-gray-400">Market Cap Progress</span>
-              <span className="text-adderrels-400 font-semibold" data-testid="text-market-cap-amount">
-                ${
-                  (currentMarketCap ?? 0) > 0
-                    ? ((currentMarketCap as number) / 1_000_000).toFixed(2)
-                    : '0.00'
-                }M / ${
-                  hasCapsUSD ? ((ceilingMarketCap as number) / 1_000_000).toFixed(2) : '0.00'
-                }M
+              <span
+                className="text-adderrels-400 font-semibold"
+                data-testid="text-market-cap-amount"
+                title={`${formatUSD(currentMarketCap ?? 0)} / ${hasCapsUSD && ceilingMarketCap && ceilingMarketCap > 0 ? formatUSD(ceilingMarketCap) : '—'}`}
+              >
+                {currentMarketCap && currentMarketCap > 0
+                  ? `${formatUSDCompact(currentMarketCap)}`
+                  : formatUSD(0)}
+                {' / '}
+                {hasCapsUSD && ceilingMarketCap && ceilingMarketCap > 0
+                  ? `${formatUSDCompact(ceilingMarketCap)}`
+                  : '—'}
               </span>
             </>
           )}
@@ -101,9 +91,10 @@ export function AuctionProgress({
           className="relative w-full h-4 rounded-full overflow-hidden bg-dark-800/80 border border-white/5"
           aria-label="Auction progress"
           role="progressbar"
-          aria-valuenow={Number.isFinite(clampedPct) ? Number(clampedPct.toFixed(1)) : 0}
+          aria-valuenow={displayPct}
           aria-valuemin={0}
           aria-valuemax={100}
+          aria-valuetext={`${displayPct}% complete${ceilingReached ? ', ceiling reached' : ''}`}
         >
           {/* Rail subtle gradient for depth */}
           <div className="absolute inset-0 opacity-60 pointer-events-none"
@@ -132,28 +123,24 @@ export function AuctionProgress({
         </div>
 
         <div className="flex justify-between text-xs text-gray-500 mt-2">
-          <span>{hasHardCap ? '0 BTC' : '$0'}</span>
+          <span>{hasHardCap ? '0 BTC' : formatUSD(0)}</span>
           <span data-testid="text-progress-percentage">
-            {(progressPercentage ?? 0).toFixed(1)}% Complete
+            {displayPct}% Complete
             {ceilingReached && <span className="text-amber-400 ml-1">(Ceiling Reached)</span>}
           </span>
           <span>
             {hasHardCap
-              ? `${hardCap!.toFixed(3)} BTC`
-              : hasCapsUSD
-                ? `$${((ceilingMarketCap as number) / 1_000_000).toFixed(2)}M`
-                : '$0'}
+              ? hardCap && hardCap > 0 ? `${formatBTC(hardCap)} BTC` : 'No cap'
+              : hasCapsUSD && ceilingMarketCap && ceilingMarketCap > 0
+                ? `${formatUSDCompact(ceilingMarketCap as number)}`
+                : '—'}
           </span>
         </div>
-
-        {/* BTC Raised line (kept for back-compat and refunds) */}
+        {/* BTC Raised line (UI only; refunds are handled offline and not shown) */}
         <div className="flex justify-between text-sm mt-4 mb-2">
           <span className="text-gray-400">BTC Raised</span>
           <span className="text-adderrels-400 font-semibold" data-testid="text-raised-amount">
-            {(totalRaised ?? 0).toFixed(3)} BTC
-            {typeof refundedBTC === 'number' && refundedBTC > 0 && (
-              <span className="text-amber-400 text-xs ml-2">({refundedBTC.toFixed(3)} BTC refunded)</span>
-            )}
+            {formatBTC(clampNumber(totalRaised ?? 0))} BTC
           </span>
         </div>
       </div>
@@ -162,7 +149,7 @@ export function AuctionProgress({
       <div className="bg-gradient-to-r from-adderrels-500/10 to-adderrels-600/10 border border-adderrels-500/30 p-4 rounded-xl">
         <p className="text-gray-400 text-sm mb-1">Current Token Price</p>
         <p className="text-2xl font-bold text-adderrels-400" data-testid="text-current-price">
-          ${typeof currentPrice === 'number' && !Number.isNaN(currentPrice) ? currentPrice.toFixed(6) : '0.000000'} ADDERRELS
+          ${Number.isFinite(currentPrice) ? Number(currentPrice).toFixed(6) : '0.000000'} ADDERRELS
         </p>
       </div>
     </div>

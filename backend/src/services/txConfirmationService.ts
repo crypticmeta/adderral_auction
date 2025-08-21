@@ -4,11 +4,12 @@
  */
 
 import axios from 'axios';
-import { PrismaClient, BtcNetwork } from '../generated/prisma';
+import prisma from '../config/prisma';
+import { BtcNetwork } from '../generated/prisma';
 import config from '../config/config';
 import { broadcastPledgeVerified } from '../websocket/socketHandler';
 
-const prisma = new PrismaClient();
+// Prisma client provided by singleton
 
 export class TxConfirmationService {
   private static instance: TxConfirmationService;

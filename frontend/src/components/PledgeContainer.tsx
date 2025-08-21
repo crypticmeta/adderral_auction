@@ -1,9 +1,13 @@
 // Container component that combines PledgeInterface and PledgeQueue
+// Purpose: Orchestrates pledge form and queue; derives wallet connection/address.
+// Tabs: Make a Pledge, Pledge Queue, Your Pledges (scoped to active auction)
+// Testing mode: Reads test wallet from localStorage (testWallet/testWalletConnected) to supply a wallet address when adapter is not connected.
 import React, { useState, useEffect } from 'react';
 import { useWalletAddress } from 'bitcoin-wallet-adapter';
 import PledgeQueue from './PledgeQueue';
+import YourPledges from './YourPledges';
 import { useWebSocket } from '@/hooks/use-websocket';
-import { AuctionState } from '@/types/auction';
+import type { AuctionState } from '@shared/types/auction';
 import PledgeInterface from './PledgeInterface';
 
 interface PledgeContainerProps {
@@ -12,10 +16,80 @@ interface PledgeContainerProps {
 }
 
 const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, walletAddress = '' }) => {
-  const [activeTab, setActiveTab] = useState<'form' | 'queue'>('form');
+  const [activeTab, setActiveTab] = useState<'form' | 'queue' | 'yours'>('form');
   const { auctionState } = useWebSocket();
   const [auctionId, setAuctionId] = useState<string>('');
   const wallet = useWalletAddress();
+  const isTesting = process.env.NEXT_PUBLIC_TESTING === 'true';
+  const [testingConnected, setTestingConnected] = useState(false);
+  const [testingAddress, setTestingAddress] = useState<string>('');
+
+  // Restore last selected tab from localStorage (client-only)
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const saved = window.localStorage.getItem('pledgeActiveTab');
+      if (!saved) return;
+      if (saved === 'form' || saved === 'queue' || saved === 'yours') {
+        setActiveTab(saved);
+      }
+    } catch {
+      // noop
+    }
+  }, []);
+
+  // Persist tab on change
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      if (!activeTab) return;
+      window.localStorage.setItem('pledgeActiveTab', activeTab);
+    } catch {
+      // noop
+    }
+  }, [activeTab]);
+
+  // Testing mode: hydrate localStorage test wallet address
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isTesting) return;
+    const pull = () => {
+      try {
+        const flag = localStorage.getItem('testWalletConnected');
+        setTestingConnected(flag === 'true');
+        const raw = localStorage.getItem('testWallet');
+        if (raw) {
+          try {
+            const obj = JSON.parse(raw) as any;
+            const addr = obj?.cardinal || obj?.cardinal_address || '';
+            setTestingAddress(typeof addr === 'string' ? addr : '');
+          } catch {
+            setTestingAddress('');
+          }
+        } else {
+          setTestingAddress('');
+        }
+      } catch {
+        setTestingConnected(false);
+        setTestingAddress('');
+      }
+    };
+    pull();
+
+    const onConnect = () => pull();
+    const onDisconnect = () => { setTestingConnected(false); setTestingAddress(''); };
+    const onStorage = (e: StorageEvent) => {
+      if (!e) return;
+      if (e.key === 'testWallet' || e.key === 'testWalletConnected') pull();
+    };
+    window.addEventListener('test-wallet-connected', onConnect as EventListener);
+    window.addEventListener('test-wallet-disconnected', onDisconnect as EventListener);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('test-wallet-connected', onConnect as EventListener);
+      window.removeEventListener('test-wallet-disconnected', onDisconnect as EventListener);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [isTesting]);
 
   // Set auction ID when auction status changes
   useEffect(() => {
@@ -31,12 +105,21 @@ const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, wa
   const maxPledge = state?.maxPledge ?? (state?.config?.maxPledgeBTC ? parseFloat(state.config.maxPledgeBTC) : undefined);
   const currentPrice = state?.currentPrice ?? 0;
   const priceError = Boolean(state?.priceError);
-  const isAuctionActive = Boolean(state?.isActive);
 
   // Prefer adapter connection over upstream prop
   const adapterConnected = wallet?.connected ?? false;
-  const finalIsWalletConnected = adapterConnected; // reflect true when wallet is actually connected
-  const finalAddress = wallet?.cardinal_address || walletAddress || '';
+  const finalIsWalletConnected = isWalletConnected || adapterConnected || (isTesting && testingConnected);
+  const finalAddress = (wallet?.cardinal_address && wallet?.cardinal_address.length > 0)
+    ? wallet.cardinal_address
+    : (isTesting && testingAddress ? testingAddress : (walletAddress || ''));
+
+  // When wallet disconnects, remove guestId so a fresh guest is created next time
+  useEffect(() => {
+    const disconnected = !adapterConnected && (!isTesting || (isTesting && !testingConnected));
+    if (disconnected) {
+      try { if (typeof window !== 'undefined') localStorage.removeItem('guestId'); } catch { /* noop */ }
+    }
+  }, [adapterConnected, isTesting, testingConnected]);
 
   return (
     <div className="glass-card p-6 rounded-3xl">
@@ -50,6 +133,15 @@ const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, wa
             }`}
         >
           Make a Pledge
+        </button>
+        <button
+          onClick={() => setActiveTab('yours')}
+          className={`px-4 py-3 font-medium text-sm ${activeTab === 'yours'
+            ? 'text-adderrels-500 border-b-2 border-adderrels-500'
+            : 'text-gray-400 hover:text-gray-300'
+            }`}
+        >
+          Your Pledges
         </button>
         <button
           onClick={() => setActiveTab('queue')}
@@ -79,8 +171,14 @@ const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, wa
             isWalletConnected={finalIsWalletConnected}
             walletAddress={finalAddress}
           />
-        ) : (
+        ) : activeTab === 'queue' ? (
           auctionId ? <PledgeQueue auctionId={auctionId} /> : (
+            <div className="text-center py-8 text-gray-400">
+              No active auction found
+            </div>
+          )
+        ) : (
+          auctionId ? <YourPledges auctionId={auctionId} /> : (
             <div className="text-center py-8 text-gray-400">
               No active auction found
             </div>

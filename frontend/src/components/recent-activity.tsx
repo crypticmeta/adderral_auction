@@ -1,9 +1,9 @@
 // Component: RecentActivity
 // Shows latest pledges with random avatars (DiceBear), truncated usernames,
 // and estimated ADDERRELS allocations computed from current auction totals.
-// Now also merges items from the live pledge queue and shows a Tx Status badge.
+// Simplified: derives display from activities only (pledges-based), no queue merging.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AuctionActivity } from '@/types/auction';
+import type { AuctionActivity } from '@shared/types/auction';
 import { useWebSocket } from '../contexts/WebSocketContext';
 
 interface RecentActivityProps {
@@ -12,49 +12,29 @@ interface RecentActivityProps {
 }
 
 export function RecentActivity({ activities = [], isConnected = false }: RecentActivityProps) {
-    const { auctionState, socket, isAuthenticated } = useWebSocket();
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-    const auctionId = auctionState?.id;
+    const { auctionState } = useWebSocket();
+    // auctionState is used for estimating allocations; no external queue fetching
 
-    type QueuePledge = {
-        id: string;
-        userId: string;
-        btcAmount: number;
-        timestamp: string | Date;
-        processed: boolean;
-        needsRefund: boolean;
-        user?: { ordinal_address?: string | null; cardinal_address?: string | null };
-    };
-
-    const [queue, setQueue] = useState<QueuePledge[]>([]);
-
-    useEffect(() => {
-        let cancelled = false;
-        const fetchQueue = async () => {
-            if (!auctionId) return;
-            try {
-                const res = await fetch(`${apiUrl}/api/pledges/auction/${auctionId}`);
-                if (!res.ok) throw new Error('Failed to fetch queue');
-                const data = await res.json();
-                if (!cancelled && Array.isArray(data)) setQueue(data);
-            } catch (e) {
-                // swallow for UI; recent activity still renders
-            }
-        };
-        fetchQueue();
-        // subscribe to pledge events for live updates
-        if (socket && isAuthenticated) {
-            const onRefetch = () => fetchQueue();
-            socket.on('pledge:queue:update', onRefetch);
-            socket.on('pledge_created', onRefetch);
-            socket.on('pledge:processed', onRefetch);
-        }
-        return () => { cancelled = true; };
-    }, [auctionId, apiUrl, socket, isAuthenticated]);
 
     const formatAddress = (address: string | null | undefined) => {
         if (!address) return 'Unknown';
-        return `${address.slice(0, 6)}...${address.slice(-4)}`;
+        // Only truncate if it looks like a BTC address; otherwise, show as-is (e.g., "user-1")
+        if (isLikelyBtcAddress(address)) {
+            return `${address.slice(0, 6)}...${address.slice(-4)}`;
+        }
+        return address;
+    };
+
+    // Basic heuristic to detect BTC-like addresses (bech32 or legacy)
+    const isLikelyBtcAddress = (s: unknown): s is string => {
+        if (typeof s !== 'string') return false;
+        const trimmed = s.trim();
+        if (!trimmed) return false;
+        // bech32 mainnet/testnet (bc1..., tb1...)
+        if (/^(bc1|tb1)[0-9a-z]{20,}$/i.test(trimmed)) return true;
+        // legacy P2PKH/P2SH (1... or 3... on mainnet)
+        if (/^[13][a-km-zA-HJ-NP-Z1-9]{20,}$/i.test(trimmed)) return true;
+        return false;
     };
 
     const avatarFor = (address: string | null | undefined) => {
@@ -99,26 +79,17 @@ export function RecentActivity({ activities = [], isConnected = false }: RecentA
     };
 
     const merged = useMemo(() => {
-        // Map queue pledges into activity-like items, preserving ability to compute status
-        const mapQueue = queue.map((p) => {
-            const wallet = p?.user?.ordinal_address || p?.user?.cardinal_address || p.userId;
+        const fromProps = (activities || []).map((a: any) => {
+            const cardinal = a?.cardinal_address ?? null;
+            const walletAddr = isLikelyBtcAddress(a?.walletAddress) ? a.walletAddress : null;
             return {
-                id: p.id,
-                walletAddress: String(wallet ?? 'unknown'),
-                btcAmount: String(p.btcAmount ?? '0'),
-                estimatedTokens: undefined, // computed on the fly
-                timestamp: String(p.timestamp ?? new Date().toISOString()),
-                refundedAmount: undefined,
-                isRefunded: p.needsRefund && p.processed ? true : false,
-                __queueMeta: { processed: p.processed, needsRefund: p.needsRefund } as any,
-            } as any;
+                ...a,
+                displayAddress: cardinal ?? walletAddr,
+            };
         });
-
-        const fromProps = (activities || []).map((a) => ({ ...a }));
-        const combined = [...mapQueue, ...fromProps];
-        combined.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        return combined.slice(0, 10);
-    }, [queue, activities]);
+        fromProps.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        return fromProps.slice(0, 10);
+    }, [activities]);
 
     // Track new items to animate slide-in
     const [animateIds, setAnimateIds] = useState<Set<string>>(new Set());
@@ -151,17 +122,6 @@ export function RecentActivity({ activities = [], isConnected = false }: RecentA
     }, [merged]);
 
     const txStatusBadge = (item: any) => {
-        const meta = item?.__queueMeta as { processed?: boolean; needsRefund?: boolean } | undefined;
-        if (meta) {
-            if (meta.processed) {
-                if (meta.needsRefund) {
-                    return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-800">Refunded</span>;
-                }
-                return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-800">Processed</span>;
-            }
-            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-800">In Queue</span>;
-        }
-        // Non-queue activity fallback
         if (item?.isRefunded) {
             return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-800">Refunded</span>;
         }
@@ -200,19 +160,26 @@ export function RecentActivity({ activities = [], isConnected = false }: RecentA
                                 data-testid={`activity-${activity.id}`}
                             >
                                 <div className="flex items-center space-x-3">
-                                    <img
-                                        src={avatarFor(activity?.walletAddress)}
-                                        alt="avatar"
-                                        className="w-8 h-8 rounded-full bg-dark-900/50 border border-white/10"
-                                    />
-                                    <div>
-                                        <p className="font-semibold" data-testid={`activity-address-${activity.id}`}>
-                                            {formatAddress(activity?.walletAddress)}
-                                        </p>
-                                        <p className="text-sm text-gray-400" data-testid={`activity-time-${activity.id}`}>
-                                            {formatTimeAgo(activity?.timestamp)}
-                                        </p>
-                                    </div>
+                                    {(() => {
+                                        const labelAddress = activity?.displayAddress ?? (isLikelyBtcAddress(activity?.walletAddress) ? activity.walletAddress : activity?.walletAddress ?? null);
+                                        return (
+                                            <>
+                                                <img
+                                                    src={avatarFor(labelAddress)}
+                                                    alt="avatar"
+                                                    className="w-8 h-8 rounded-full bg-dark-900/50 border border-white/10"
+                                                />
+                                                <div>
+                                                    <p className="font-semibold" data-testid={`activity-address-${activity.id}`}>
+                                                        {formatAddress(labelAddress)}
+                                                    </p>
+                                                    <p className="text-sm text-gray-400" data-testid={`activity-time-${activity.id}`}>
+                                                        {formatTimeAgo(activity?.timestamp)}
+                                                    </p>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                                 <div className="text-right">
                                     <p className="font-semibold text-cyan-400" data-testid={`activity-btc-${activity.id}`}>

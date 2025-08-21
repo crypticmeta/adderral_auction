@@ -7,14 +7,17 @@ import { AuctionProgress } from '@/components/auction-progress';
 import { RecentActivity } from '@/components/recent-activity';
 import PledgeContainer from '@/components/PledgeContainer';
 import { useWebSocket } from '@/hooks/use-websocket';
-import { ConnectMultiButton } from 'bitcoin-wallet-adapter';
 import http from '@/lib/http';
 import { useWalletAddress } from 'bitcoin-wallet-adapter';
+import { formatUSDCompact } from '@/lib/format';
+import TestingBanner from '@/components/TestingBanner';
 
 export default function Home() {
-  // Derive wallet connection from adapter (no localStorage)
+  // Derive wallet connection from adapter or testing localStorage
   const wallet = useWalletAddress();
-  const isWalletConnected = wallet?.connected ?? false;
+  const isTesting = process.env.NEXT_PUBLIC_TESTING === 'true';
+  const [testConnected, setTestConnected] = useState(false);
+  const isWalletConnected = (wallet?.connected ?? false) || (isTesting && testConnected);
   const walletAddress = wallet?.cardinal_address ?? '';
   const [isAdmin, setIsAdmin] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -28,6 +31,45 @@ export default function Home() {
   // In dev mode, show reset button for any connected wallet
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    // Testing mode: read localStorage for test wallet connection
+    if (isTesting) {
+      try {
+        const flag = localStorage.getItem('testWalletConnected');
+        setTestConnected(flag === 'true');
+        console.log('[TestConnect][page] initial testWalletConnected =', flag);
+      } catch (_) { }
+
+      // React to header's test connect event and storage changes
+      const updateFromLocalStorage = () => {
+        try {
+          const flag2 = localStorage.getItem('testWalletConnected');
+          setTestConnected(flag2 === 'true');
+          console.log('[TestConnect][page] updated testWalletConnected =', flag2);
+        } catch (_) { }
+      };
+      const onTestConnect = () => updateFromLocalStorage();
+      const onTestDisconnect = () => {
+        console.log('[TestConnect][page] received test-wallet-disconnected');
+        setTestConnected(false);
+      };
+      const onStorage = (e: StorageEvent) => {
+        if (!e) return;
+        if (e.key === 'testWalletConnected' || e.key === 'testWallet') {
+          console.log('[TestConnect][page] storage event', e.key, '->', e.newValue);
+          updateFromLocalStorage();
+        }
+      };
+      window.addEventListener('test-wallet-connected', onTestConnect as EventListener);
+      window.addEventListener('test-wallet-disconnected', onTestDisconnect as EventListener);
+      window.addEventListener('storage', onStorage);
+      // Cleanup
+      return () => {
+        window.removeEventListener('test-wallet-connected', onTestConnect as EventListener);
+        window.removeEventListener('test-wallet-disconnected', onTestDisconnect as EventListener);
+        window.removeEventListener('storage', onStorage);
+      };
+    }
 
     const checkDevMode = () => {
       // Check if we're in development mode using environment variable or localhost check
@@ -43,7 +85,7 @@ export default function Home() {
     if (isWalletConnected) {
       checkDevMode();
     }
-  }, [isWalletConnected]);
+  }, [isWalletConnected, isTesting]);
 
   const handleResetAuction = async () => {
     if (!window.confirm('Are you sure you want to reset the auction? This will clear all pledges and restart the auction.')) {
@@ -89,11 +131,37 @@ export default function Home() {
     );
   }
 
-  const { config, totalRaised, refundedBTC, currentMarketCap, ceilingMarketCap, ceilingReached, progressPercentage, currentPrice, timeRemaining, endTimeMs, serverTimeMs, recentActivity } = auctionState;
+  const { config, totalRaised, currentMarketCap, ceilingMarketCap, ceilingReached, progressPercentage, currentPrice, timeRemaining, endTimeMs, serverTimeMs, recentActivity } = auctionState;
 
   // Null-safe derived values
   const totalTokensM = config?.totalTokens ? parseInt(config.totalTokens) / 1_000_000 : 0;
-  const currentMarketCapM = typeof currentMarketCap === 'number' ? (currentMarketCap / 1_000_000) : 0;
+  const currentMarketCapUSD = typeof currentMarketCap === 'number' ? currentMarketCap : 0;
+  const ceilingUSD = typeof ceilingMarketCap === 'number' && ceilingMarketCap > 0
+    ? ceilingMarketCap
+    : (config?.ceilingMarketCapUSD ? Number(config.ceilingMarketCapUSD) : 0);
+  // Compute Max Duration from DB-provided start/end when available; fallback to 72h
+  const getMaxDurationLabel = () => {
+    const anyState = auctionState as any;
+    const startMs: number | undefined =
+      (typeof anyState?.startTimeMs === 'number' ? anyState.startTimeMs : undefined) ??
+      (typeof anyState?.startTime === 'number' ? anyState.startTime : undefined) ??
+      (typeof anyState?.config?.startTimeMs === 'number' ? anyState.config.startTimeMs : undefined);
+    const endMs: number | undefined = typeof endTimeMs === 'number' ? endTimeMs : (typeof anyState?.endTimeMs === 'number' ? anyState.endTimeMs : undefined);
+
+    if (typeof startMs === 'number' && typeof endMs === 'number' && endMs > startMs) {
+      const totalMs = endMs - startMs;
+      const totalMinutes = Math.floor(totalMs / 60000);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
+      if (hours > 0) return `${hours}h`;
+      if (minutes > 0) return `${minutes}m`;
+      return '0m';
+    }
+    // Fallback to default 72h when start not provided by backend
+    return '72h';
+  };
+  const maxDurationLabel = getMaxDurationLabel();
 
   return (
     <div className="font-inter bg-dark-950 text-white overflow-x-hidden min-h-screen">
@@ -106,6 +174,13 @@ export default function Home() {
         <div className="absolute inset-0 gradient-bg opacity-95" />
         <div className="absolute inset-0 banner-overlay" />
       </div>
+
+      {/* Global Testing Banner */}
+      {isTesting && (
+        <div className="relative z-20 max-w-6xl mx-auto px-6 mt-2">
+          <TestingBanner />
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="relative z-10 min-h-screen pt-8 pb-16 section-gradient">
@@ -129,17 +204,16 @@ export default function Home() {
             </h1>
             <h2 className="text-2xl md:text-3xl font-bold text-gray-300 mb-2">First Come, First Served Auction</h2>
             <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-              Join the ADDERRELS token FCFS auction. {totalTokensM}M tokens available with a ceiling market cap of $15M.
+              Join the ADDERRELS token FCFS auction. {totalTokensM}M tokens available with a ceiling market cap of {formatUSDCompact(ceilingUSD)}.
             </p>
           </div>
 
           {/* Auction Stats */}
           <AuctionStats
             totalTokens={(totalTokensM).toString()}
-            ceilingMarketCap="15"
-            currentMarketCap={currentMarketCapM.toFixed(2)}
-            duration="72"
-            totalRaisedBTC={typeof totalRaised === 'number' ? totalRaised : 0}
+            ceilingMarketCap={ceilingUSD}
+            currentMarketCap={currentMarketCapUSD}
+            duration={maxDurationLabel}
           />
 
           {/* Main Auction Interface */}
@@ -149,7 +223,6 @@ export default function Home() {
               endTimeMs={endTimeMs}
               serverTimeMs={serverTimeMs}
               totalRaised={totalRaised}
-              refundedBTC={refundedBTC}
               currentMarketCap={currentMarketCap}
               ceilingMarketCap={ceilingMarketCap}
               ceilingReached={ceilingReached}
@@ -190,7 +263,7 @@ export default function Home() {
                 If ceiling market cap isn't reached, auction ends after 72 hours.
               </p>
               <p className="text-sm text-gray-400">
-                Final token price determined by total BTC raised (minus refunds) ÷ {totalTokensM}M tokens.
+                Final token price determined by total BTC raised ÷ {totalTokensM}M tokens.
               </p>
             </div>
           </div>
@@ -212,7 +285,7 @@ export default function Home() {
           <div className="glass-card bg-dark-900/70 backdrop-blur border border-white/10 rounded-t-2xl px-6 py-6">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 bg-gradient-to-r from-adderrels-500 to-adderrels-600 rounded-full p-1.5 overflow-hidden">
+                <div className="w-9 h-9 rounded-full border-2 border-orange-500 overflow-hidden">
                   <img src="/adderrel.png" alt="Adderrels" className="w-full h-full object-contain" />
                 </div>
                 <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-adderrels-400 to-adderrels-600 bg-clip-text text-transparent">

@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import io, { Socket } from 'socket.io-client';
-import { AuctionActivity, AuctionState } from '@/types/auction';
+import type { AuctionActivity, AuctionState } from '@shared/types/auction';
 import { useDebugLog } from '@/contexts/DebugLogContext';
 
 interface WebSocketContextType {
@@ -66,7 +66,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     const minPledgeNum: number | undefined = typeof data.minPledge === 'number' ? data.minPledge : undefined;
     const maxPledgeNum: number | undefined = typeof data.maxPledge === 'number' ? data.maxPledge : undefined;
 
-    // Prefer precise timing via endTime - serverTime for consistency across clients
+    // Prefer precise timing via start/end - serverTime for consistency across clients
+    const startTimeMs: number | null = data.startTime ? new Date(data.startTime).getTime() : null;
     const endTimeMs: number | null = data.endTime ? new Date(data.endTime).getTime() : null;
     const serverTimeMs: number | null = typeof data.serverTime === 'number' ? data.serverTime : null;
     let remainingMs = 0;
@@ -90,7 +91,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     if (Array.isArray(data.pledges)) {
       recentActivity = data.pledges.slice(-10).map((p: any) => ({
         id: String(p.id ?? `${Math.random()}`),
-        walletAddress: String(p.walletAddress ?? p.userId ?? 'unknown'),
+        walletAddress: String(p.cardinal_address ?? p.user?.cardinal_address ?? p.walletAddress ?? p.userId ?? 'unknown'),
+        cardinal_address: p.cardinal_address ?? p.user?.cardinal_address ?? null,
+        ordinal_address: p.ordinal_address ?? p.user?.ordinal_address ?? null,
         btcAmount: String(p.btcAmount ?? p.amount ?? '0'),
         estimatedTokens: String(p.estimatedTokens ?? '0'),
         timestamp: String(p.timestamp ?? new Date().toISOString()),
@@ -120,6 +123,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       minPledge: minPledgeNum,
       maxPledge: maxPledgeNum,
       timeRemaining: { hours, minutes, seconds },
+      startTimeMs: startTimeMs ?? undefined,
       endTimeMs: endTimeMs ?? undefined,
       serverTimeMs: serverTimeMs ?? undefined,
       recentActivity,
@@ -200,6 +204,34 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         setAuctionState(transformToAuctionState(data));
       });
 
+      // Debounced requester to avoid flooding server on rapid events
+      let lastStatusReq = 0;
+      const requestStatus = () => {
+        const now = Date.now();
+        if (now - lastStatusReq < 750) return;
+        lastStatusReq = now;
+        try { sendMessage('get_auction_status', {}); } catch {}
+      };
+
+      // When pledge-related events arrive, refresh auction status so UI totals update immediately
+      newSocket.on('pledge_created', (data) => {
+        debug?.addEntry('in', 'pledge_created', data);
+        requestStatus();
+      });
+      newSocket.on('pledge:queue:update', (data) => {
+        debug?.addEntry('in', 'pledge:queue:update', data);
+        requestStatus();
+      });
+      newSocket.on('pledge:queue:position', (data) => {
+        debug?.addEntry('in', 'pledge:queue:position', data);
+        // position alone may not change totals, but keep UI in sync
+        requestStatus();
+      });
+      newSocket.on('pledge_verified', (data) => {
+        debug?.addEntry('in', 'pledge_verified', data);
+        requestStatus();
+      });
+
       newSocket.on('error', (data) => {
         console.error('Socket.IO error:', data.message);
         setError(data.message);
@@ -276,10 +308,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   // Request auction status update when authenticated
   useEffect(() => {
     if (isConnected && isAuthenticated) {
-      // Request initial auction status
-      sendMessage('get_auction_status', {});
-
-      // Set up interval to refresh auction status
+      // Set up interval to refresh auction status (server already emits once on connect)
       const statusInterval = setInterval(() => {
         if (isConnected && isAuthenticated) {
           sendMessage('get_auction_status', {});

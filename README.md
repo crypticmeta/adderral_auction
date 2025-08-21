@@ -1,3 +1,28 @@
+<!-- File: README.md | Purpose: Project overview, setup, and testing. Includes backend test isolation notes (global beforeEach truncation) and the beforeEach data-creation pattern. -->
+## Shared Types
+
+- Location: `shared/types/`
+- Path aliases:
+  - Frontend: `@shared/*` → `../shared/*` (configured in `frontend/tsconfig.json`)
+  - Backend: `@shared/*` → `../shared/*` (configured in `backend/tsconfig.json`)
+- Usage: import only types to avoid runtime resolution requirements. Example:
+  ```ts
+  import type { TimeRemaining, AuctionProgressProps } from '@shared/types/auction';
+  ```
+  Type-only imports are erased at build time and are safe in both projects.
+
+### Common app types
+
+- Additional shared types live in `shared/types/common.ts` (wallet metadata, pledge queue items, minimal auction shapes, etc.).
+- Central barrel export: `shared/types/index.ts` so you can also do:
+  ```ts
+  import type { AuctionState, PledgeItem, WalletDetails } from '@shared/types';
+  ```
+- The legacy `frontend/src/types/` directory has been migrated/removed. All imports should use `@shared/types/*` going forward.
+
+- Canonical wallet shape: `WalletDetails` in `shared/types/common.ts`
+  - Matches bitcoin-wallet-adapter output: `{ cardinal, cardinalPubkey, ordinal, ordinalPubkey, connected, wallet, derivationPath? }`
+  - Use `WalletDetails` across frontend and backend. Backend `createPledge` accepts `walletDetails` directly. The legacy `WalletInfo` has been removed.
 A new background task now verifies pledge txids against mempool.space and marks pledges as verified when confirmed. Configurable via env (see Backend runtime/env notes).
 
 - **Tx Confirmation Service (background)**
@@ -8,12 +33,37 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - WebSocket: emits `pledge_verified` on confirmation via `broadcastPledgeVerified()`.
 
  - **Frontend UI Improvements**:
-   - Set app favicon to `/public/adderrel.png` via Next.js metadata in `frontend/src/app/layout.tsx` (will switch after asset rename)
-   - Configured `WalletProvider` to accept and pass `customAuthOptions` to `bitcoin-wallet-adapter` with Adderrels icon
-   - Default network is `mainnet`; override via `customAuthOptions` if needed
+  - Set app favicon to `/public/adderrel.png` via Next.js metadata in `frontend/src/app/layout.tsx` (will switch after asset rename)
+  - Configured `WalletProvider` to accept and pass `customAuthOptions` to `bitcoin-wallet-adapter` with Adderrels icon
+  - Default network is `mainnet`; override via `customAuthOptions` if needed
+  - Auction Progress bar formatting/accessibility improvements (Intl formatting, ARIA valuetext, clamped display percent)
+  - Removed refund display from UI; refunds (if any) are handled manually by the team and not surfaced in the interface
+  - Auction Stats numbers now use compact formatting (Intl):
+    - Tokens: K/M/B automatically (no fixed `M` suffix). Implemented in `frontend/src/components/auction-stats.tsx`.
+    - USD values: compact currency, e.g. `$5K`, `$15M`.
+    - Null-safe parsing with fallbacks.
 # Adderrels Auction Platform
 
 ## Recent Updates
+- **API change: Wallet connect**
+  - Removed single-wallet endpoint `POST /api/auction/connect-wallet`.
+  - Standardized on `POST /api/auction/connect-multi-wallet` which now always upserts both addresses and metadata on `User`.
+  - Request body: `{ userId, btcAddress, taprootAddress, publicKey, ordinalPubKey?, wallet?, network?, signature?, message? }`
+  - Response: `{ id, cardinal_address, ordinal_address, cardinal_pubkey, ordinal_pubkey, wallet, network, connected }`
+  - Motivation: Store all information provided by bitcoin-wallet-adapter (cardinal + ordinal).
+ - **API change: Pledges (pay-first flow, single deposit address)**
+  - Get deposit address: `GET /api/pledges/deposit-address` → returns `{ depositAddress, network }` where `depositAddress` is read from env `BTC_DEPOSIT_ADDRESS`.
+  - Create pledge after payment: `POST /api/pledges/` with canonical satoshi amount. Body:
+    - Required: `{ userId: string, satsAmount: number, walletDetails: WalletDetails, txid: string }`
+    - Optional (back-compat/UI): `{ btcAmount?: number, depositAddress?: string }`
+  - Fetch pledges by cardinal address for an auction: `GET /api/pledges/auction/:auctionId/cardinal/:cardinalAddress`.
+  - Frontend fetches the deposit address, triggers wallet payment, obtains `txid`, then creates the pledge. The backend scheduler confirms on-chain; there are no verify/attach endpoints.
+- **Backend stability fixes**
+  - Implemented Prisma client singleton at `backend/src/config/prisma.ts` and refactored all usages to prevent connection pool exhaustion (timeouts P2024).
+  - Added Redis error handlers to Socket.IO Redis adapter clients in `backend/src/websocket/socketHandler.ts` to avoid unhandled connection errors.
+  - Gracefully handle duplicate pledge attempts (Prisma P2002) in `backend/src/controllers/pledgeController.ts#createPledge` by returning HTTP 409 with a helpful message.
+  - Refactored services and controllers to import the singleton: `auctionController.ts`, `scheduledTasks.ts`, `txConfirmationService.ts`, `walletController.ts`, `routes/api/auction/reset.ts`.
+  - Removed unused Prisma imports where applicable (e.g., `pledgeQueueService.ts`).
 - **Auction Min/Max in Sats (breaking change)**
   - Replaced `Auction.minPledge`/`maxPledge` (BTC float) with `minPledgeSats`/`maxPledgeSats` (Int, sats) in `backend/prisma/schema.prisma`.
   - Backend controllers and WebSocket outputs now convert sats -> BTC only for responses.
@@ -37,6 +87,12 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Cleaned demo-related comment wording in `frontend/src/components/auction-progress.tsx`.
   - Ensured null-safety and production-ready UI copy (no demo/preview mentions).
 
+- **Pledge pay-first flow (Frontend)**
+  - `PledgeForm.tsx` integrates `usePayBTC()` from `bitcoin-wallet-adapter`.
+  - Flow: fetch deposit address → `payBTC({ address, amount, network })` → obtain `txid` from wallet → `POST /api/pledges` with `txid` and `depositAddress`.
+  - Robust null checks; pledge creation is blocked if wallet does not return a `txid`.
+  - Testing mode remains unchanged and may bypass real payment.
+
 - **Public Stats Page + Endpoint**
   - New Next.js page at `/stats` shows total BTC pledged in the last 24h, 48h, and 72h.
   - Backend public endpoint `GET /api/pledges/stats` returns these totals (scoped to active auction if present; otherwise across all).
@@ -47,21 +103,36 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Bitcoin price service tests perform real HTTP calls (no mocks) and assert Redis cache TTLs
   - Scheduled tasks use a leak-safe interval with `.unref()` and expose `stopBitcoinPriceRefresh()` for tests
   - Detailed logs added to global setup; Prisma generate/migrate executed automatically
+  - Tx confirmation scheduler test verifies pending vs confirmed txids using live mempool.space
 - **Animated Auction Progress Bar (Live-reactive)**
   - Lively gradient fill with shimmer and subtle bump on pledge-driven increases
   - Reacts in real time to `auction_status` WebSocket updates
   - Files: `frontend/src/components/auction-progress.tsx`, `frontend/src/app/globals.css`
   - Accessible with `role="progressbar"` and ARIA values
-- **Raised So Far Highlight**
-  - New highlighted stat card in `AuctionStats` showing total BTC raised with a percentage-of-ceiling badge
-  - Prop: `totalRaisedBTC` added to `AuctionStats` and wired from `page.tsx`
+- **Backend: Multiple pledges per user**
+  - Removed unique constraint on `Pledge` (`@@unique([auctionId, userId])`) to allow multiple pledges from the same user (identified by cardinal address) within a single auction.
+  - Run migrations from `backend/`:
+    ```bash
+    yarn prisma:generate
+    yarn prisma:migrate
+    ```
+  - Controllers currently do not block duplicates; no code changes required.
+- **UI change: Removed Raised-So-Far card**
+  - The highlighted stat card showing total BTC raised was removed from `AuctionStats` (auction progress is visible elsewhere).
+  - Prop `totalRaisedBTC` has been dropped from `AuctionStats` and its usage removed in `page.tsx`.
   - Files: `frontend/src/components/auction-stats.tsx`, `frontend/src/app/page.tsx`
+- **UI: Recent Activity usernames**
+  - Recent Activity now derives usernames and avatars strictly from the user's `cardinal_address`.
+  - Queue items and the UI's recent activity feed use `cardinal_address` for display; safe fallbacks remain when null.
+  - File: `frontend/src/components/recent-activity.tsx`.
+  - The frontend now derives Recent Activity exclusively from the `pledges` array in `auction_status`.
 - **Footer UI Polish**
   - Glass-card footer with rounded top, blur, and clearer border for readability
   - File: `frontend/src/app/page.tsx`
 - **WS Payload: Auction ID**
   - `auction_status` now includes `id` (active auction ID)
   - Frontend reads `auctionState.id` to route API calls
+  - `auction_status` payload is now simplified: it includes a canonical `pledges` array only. The frontend derives Recent Activity from the last N pledges and uses `cardinal_address` for usernames/avatars.
 - **Queue Limits Fetching**
   - `PledgeQueue` no longer falls back to WS data for min/max limits
   - It uses `/api/pledges/max-pledge/:auctionId` exclusively and shows a subtle error note if unavailable
@@ -85,9 +156,19 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Subtle decorative gradient orbs in background
   - Enhanced glass cards and accent glows
   - Layout structure preserved (no markup restructuring)
+- **Wallet identity + guest lifecycle (frontend)**
+  - The app now prefers the connected wallet's cardinal address as the user identifier when creating pledges.
+  - `guestId` is used only as a fallback when no wallet address is available.
+  - On wallet disconnect, `guestId` is cleared automatically so the next connection/pledge session creates a fresh guest.
+  - Testing disconnect (Header's Test mode) also clears `guestId`.
+- **Pledge verification**
+  - Verification is handled by the backend scheduler only; there is no frontend verify/attach call.
+  - Frontend verify timers have been removed from `PledgeForm.tsx` and `PledgeInterface.tsx`.
+  - After payment, the pledge is created with `txid` and later marked verified when confirmations are detected.
 - **Centralized TypeScript Types**: Implemented a centralized type system
-  - All shared types moved to a central `/src/types` directory
-  - Improved type consistency across controllers and services
+  - All shared types live in `shared/types/` and are consumed via `@shared/types`
+  - Added shared UI types for `AuctionProgress` and `TimeRemaining` used by components
+  - Improved type consistency across controllers, services, and frontend components
   - Better TypeScript error detection and prevention
   - Easier maintenance and updates to shared interfaces
 
@@ -96,7 +177,13 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Real-time queue position updates via WebSocket events
   - Refund flag for pledges exceeding auction ceiling
   - Frontend queue display showing pledge status and position
-  - Tabbed interface to switch between pledge form and queue view
+
+- **CI/CD Workflows Updated**
+  - Backend and Frontend GitHub Actions now build with repository root context so Docker can access `shared/` during builds.
+  - Workflows trigger on changes under `shared/**` as well as their respective app folders.
+  - Tabbed interface now includes three tabs: Make a Pledge, Pledge Queue, and Your Pledges
+  - The last-selected tab persists across reloads via `localStorage` key `pledgeActiveTab`.
+  - Views are now split: `PledgeQueue` shows the live queue; `YourPledges` lists the connected user's pledges.
 
 - **Bitcoin Price Service**: Added real-time Bitcoin price fetching with 30-minute cache
   - Fetches BTC price from multiple sources (CoinGecko, Binance, CoinCap)
@@ -171,7 +258,7 @@ adderrels-auction/
 │   │   ├── models/    # Data models
 │   │   ├── routes/    # API routes
 │   │   ├── services/  # Services including Bitcoin price fetching
-│   │   ├── types/     # Centralized TypeScript type definitions
+│   │   ├── ...        # (All TypeScript types are consolidated under shared/types)
 │   │   ├── websocket/ # WebSocket handlers
 │   │   └── server.ts  # Main server entry point
 │   └── ...
@@ -181,6 +268,8 @@ adderrels-auction/
     │   ├── components/ # React components
     │   └── contexts/  # React contexts
     └── ...
+├── shared/
+│   └── types/        # Shared TypeScript types used by both frontend and backend
 ```
 
 ## Prerequisites
@@ -208,11 +297,12 @@ adderrels-auction/
    ```
 
 4. Update the `.env` file with your configuration:
-   ```
-   PORT=5000
-   JWT_SECRET=your_secret_key
-   CLIENT_URL=http://localhost:3000
-   ```
+  ```
+  PORT=5000
+  JWT_SECRET=your_secret_key
+  CLIENT_URL=http://localhost:3000
+  BTC_DEPOSIT_ADDRESS=bc1qxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  ```
 
 5. Start the development server:
    ```bash
@@ -261,10 +351,17 @@ Notes:
 
 4. Adjust values in `.env.local` as needed (defaults shown in the example):
    ```
-   NEXT_PUBLIC_API_URL=http://localhost:5000
-   NEXT_PUBLIC_WS_URL=ws://localhost:5000
-   NEXT_PUBLIC_APP_ENV=development
-   ```
+  NEXT_PUBLIC_API_URL=http://localhost:5000
+  NEXT_PUBLIC_WS_URL=ws://localhost:5000
+  NEXT_PUBLIC_APP_ENV=development
+  NEXT_PUBLIC_BTC_NETWORK=mainnet
+  NEXT_PUBLIC_TESTING=false
+  ```
+
+5. Centralized env config (frontend):
+  - File: `frontend/src/config/env.ts`
+  - Import via `import { env } from '@/config/env'` or relative from components.
+  - Exposes: `apiUrl`, `wsUrl`, `appEnv`, `testing`, `btcNetwork`.
 
 5. Start the development server:
    ```bash
@@ -275,15 +372,32 @@ Notes:
 
 To enable the WebSocket Debug Window, set `NEXT_PUBLIC_APP_ENV` to `development` in your `.env.local` file. This will automatically enable the debug window. The debug window will appear as a floating panel on the right side of the screen, showing inbound and outbound WebSocket events. You can copy all logs or clear them for quick debugging.
 
+## Frontend Testing Mode
+
+- Enable by setting `NEXT_PUBLIC_TESTING=true` in `frontend/.env.local` (see `frontend/.env.local.example`).
+- When enabled:
+  - Header shows a "Test Connect" button and hides the normal `ConnectMultiButton`.
+  - After connecting, a "Disconnect" button appears to clear testing state immediately (removes `localStorage` keys and broadcasts `test-wallet-disconnected`).
+  - Clicking "Test Connect" stores a random test wallet in `localStorage` under keys:
+    - `testWallet` (JSON wallet object), `testWalletConnected` = `"true"`.
+  - Home page (`frontend/src/app/page.tsx`) treats this as connected and passes it down to pledge UI.
+  - Pledge UI (`frontend/src/components/PledgeInterface.tsx`):
+    - Shows a demo balance equal to `$100,000` converted to BTC at current BTC/USD price.
+    - Validates input against this demo balance (you cannot pledge more than ~$10k in BTC).
+    - After successful pledge creation, auto-verifies the pledge by posting a random txid after a 60–120s delay.
+    - It prefers a txid from `/public/txids.json` if available; otherwise generates a random 64-hex string.
+- Disable by setting `NEXT_PUBLIC_TESTING=false` or removing the var.
+- Clear testing state by removing `localStorage` keys `testWallet` and `testWalletConnected`.
+
 ## Auction Mechanics
 
 The Adderrels auction follows a First Come, First Served (FCFS) model with these rules:
 
 - Total tokens for sale: 100 million (10% of total supply)
 - Ceiling market cap: $15 million
-- Auction duration: 72 hours
-- Minimum pledge: 0.001 BTC (stored as 100,000 sats)
-- Maximum pledge: 0.5 BTC (stored as 50,000,000 sats)
+- Default auction duration: 72 hours
+- Dev reseed mode creates a separate 24-hour demo auction targeting ~$1,000 total in USD terms (see below).
+- Minimum/Maximum pledge are stored as sats and may be dynamically set by reseed.
 
 Auction scenarios:
 - Scenario 1: Ceiling market cap reached before 72 hours, auction ends immediately
@@ -296,19 +410,24 @@ Refund mechanism:
 ## API Endpoints
 
 ### Authentication
-- `POST /api/auth/guest-token` - Get a guest JWT token
+- `POST /api/auth/guest-id` - Get a guest ID (used for identifying guest users; no bearer token required)
 
 ### Auction
 - `GET /api/auction/status` - Get auction status (public)
-- `POST /api/auction/reset` - Dev-only full reset: truncates `User`, `Auction`, `Pledge`, `RefundedPledge`, reseeds admin + sample users + a fresh 72h auction, purges Redis `auction:*` caches, and broadcasts the new state
+- `POST /api/auction/reset` - Dev-only auction reset: deletes pledges for the active auction and restarts it with a fresh 72h window; does not touch users
+- `POST /api/auction/reseed` - Dev-only full DB wipe + reseed: truncates `User`, `Auction`, `Pledge` and seeds admin, sample users, one active 24h auction targeting ~$1,000 (USD) using live BTC price to set dynamic `minPledgeSats`/`maxPledgeSats`, and 6–10 pledges totaling near the target.
+
+### Status
+- `GET /api/status` - Backend runtime status used by the frontend env guard.
+  - Response: `{ network: 'mainnet' | 'testnet', testing: boolean, nodeEnv: string }`
 
 ## WebSocket Messages
 
 ### Client to Server
-- `auth` - Authenticate with guest token
+- `auth` - Authenticate with guest ID
 
 ### Server to Client
-- `auction_status` - Periodic auction status updates
+- `auction_status` - Periodic auction status updates (also requested immediately after pledge events on the client)
 - `pledge_created` - New pledge created
 - `pledge_verified` - Pledge verification status
 - `pledge:processed` - Pledge has been processed from the queue
@@ -321,6 +440,44 @@ Refund mechanism:
 - Next.js + TypeScript + TailwindCSS
 - Realtime via Socket.IO client
 - Uses `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL`
+- Env guard: compares `NEXT_PUBLIC_BTC_NETWORK` and `NEXT_PUBLIC_TESTING` with backend `/api/status`.
+
+### Header Wallet Balance
+- The header (`frontend/src/components/Header.tsx`) shows the connected wallet's confirmed BTC balance and an approximate USD value.
+- Balance badge is hidden when no wallet is connected (no `confirmed` balance available).
+- Implemented using `useWalletBalance` from `bitcoin-wallet-adapter` with null-safe checks and improved formatting.
+- `ConnectMultiButton` now:
+  - Uses network from `env.btcNetwork` (`NEXT_PUBLIC_BTC_NETWORK`).
+  - Limits `supportedWallets` to `Unisat`, `Xverse`, `Leather` (Phantom excluded).
+  - Optionally receives current balance for display.
+
+### Global Network Tag & Env Guard
+- Header shows a small tag with the current frontend network and testing flag (e.g. `mainnet TEST`).
+- A global guard component fetches backend status from `/api/status` and blocks the UI with a fullscreen warning if:
+  - Frontend `NEXT_PUBLIC_BTC_NETWORK` != backend `BTC_NETWORK`, or
+  - Frontend `NEXT_PUBLIC_TESTING` != backend `TESTING`.
+- Update envs to resolve and refresh the app.
+
+### Reset DB Button (Dev-only)
+- `ResetDbButton.tsx` adds an AbortController with a 15s timeout for `/api/auction/reseed` to avoid hanging requests and shows a friendly timeout error.
+
+Example internals:
+```javascript
+import { ConnectMultiButton, useWalletBalance } from 'bitcoin-wallet-adapter';
+const { balance, btcPrice } = useWalletBalance();
+const confirmedBtc = balance?.confirmed ?? 0;
+```
+
+### Global Testing Banner
+- A global testing banner is shown at the top of the homepage when `NEXT_PUBLIC_TESTING=true`.
+- Component: `frontend/src/components/TestingBanner.tsx`.
+- Rendered in `frontend/src/app/page.tsx` just below the background, above the main content.
+- Purpose: indicate sandbox mode; balances/data may be simulated.
+
+Enable it by adding to `frontend/.env.local` and rebuilding the frontend:
+```
+NEXT_PUBLIC_TESTING=true
+```
 
 ### Recent Activity / Pledge Queue UI
 
@@ -328,22 +485,77 @@ Refund mechanism:
 - Usernames are truncated addresses (e.g. `bc1qxyz...9a2f`)
 - Shows estimated ADDERRELS allocation for each pledge based on current totals
 - Realtime updates on `pledge_created`, `pledge:processed`, `pledge:queue:update`
-- Recent Activity merges live queue entries with activity feed and displays a Tx Status badge (In Queue / Processed / Refunded / Confirmed)
+- Recent Activity merges live queue entries with activity feed and displays a Tx Status badge (In Queue / Processed / Confirmed). Refund states are not shown in the UI.
+ - Allocation info: an info icon in the Allocation column header toggles the formula panel. Formula used: `tokens = (totalTokens / totalPledgedBTC) × pledgeBTC`, where `totalPledgedBTC` includes processed + pending pledges. The table lists only pending pledges.
+ - Highlighting: pending pledges by the connected wallet are highlighted in the table for quick visibility.
 
 ### Backend
 - Node + TypeScript + Express
 - Prisma + Postgres
 - Redis (queue + Socket.IO adapter)
  - Jest + ts-jest for automated tests (Bitcoin Price Service, scheduler, WS emissions)
+- Exposes `/api/status` and reads:
+  - `BTC_NETWORK` (default: `mainnet`)
+  - `TESTING` (default: `false`)
 
 ## Testing
 
 - Backend tests live under `backend/src/tests/`:
-  - `bitcoinPriceService.test.ts`: uses live HTTP; validates median calc, short/long Redis caches, and failure handling.
+  - `bitcoinPriceService.test.ts`: live HTTP; validates median calc, short/long Redis caches, and failure handling.
   - `scheduledTasks.test.ts`: starts the real scheduler and waits for Redis to populate; stops interval after each test.
-  - `socketHandler.price.test.ts`: uses live price service; asserts `priceError` semantics and computed fields.
-- Tests run against real Postgres and Redis using Testcontainers and require internet for live price APIs.
+  - `txConfirmationScheduler.e2e.test.ts`: uses mempool.space live endpoints to assert that the tx-confirmation scheduler marks pledges correctly:
+    - Picks a confirmed txid from `frontend/public/txids.json` (verifies it is still confirmed).
+    - Fetches a recent pending txid from `GET https://mempool.space/api/mempool/recent`.
+    - Seeds pledges for both and runs `txConfirmationService.checkUnverifiedPledges()`; expects confirmed/pending statuses respectively.
+    - Note: this test performs real network calls and may be rate-limited; prefer running with local Docker services up (Postgres/Redis) to reduce variability.
+  - `socketHandler.price.test.ts`: isolates and mocks BTC price; asserts `priceError` semantics and computed fields.
+  - `socketHandler.payload.test.ts`: validates completeness of `auction_status` payload and pledge user addresses across scenarios (price ok/error, ceiling reached).
+  - `statusRoutes.test.ts`: validates `GET /api/status` returns `{ network, testing, nodeEnv, btcUsd }` with `btcUsd` as number|null.
+- Tests default to Testcontainers (ephemeral Postgres/Redis). Optional local mode is below.
 - Ensure Docker is running; then from `backend/` run `yarn test`.
+
+### Hybrid local services for backend tests (optional)
+
+- Prefer Testcontainers by default. For faster local runs you can reuse persistent local Docker services.
+- Start local Postgres and Redis from `backend/`:
+  ```bash
+  yarn services:up
+  ```
+- pgAdmin is available at http://localhost:5050 (email: `admin@local.test`, password: `admin`).
+  - Add a server: Host `acorn_test_postgres` or `localhost`, Port `5432`, User `test`, Password `test`, DB `testdb`.
+  - Useful for inspecting schemas and running queries during tests.
+- Set env for Jest (e.g., in your shell or `.env.test.local` loaded by your environment):
+  ```bash
+  # Postgres (matches docker-compose.test.yml)
+  DATABASE_URL=postgresql://test:test@localhost:5432/testdb?schema=public
+  # Redis (prefer REDIS_URL; falls back to host/port)
+  REDIS_URL=redis://localhost:6379
+  ```
+- Run tests using local services:
+  ```bash
+  yarn test:local
+  ```
+  - To run just the tx confirmation scheduler test:
+    ```bash
+    yarn test:local -t "Tx Confirmation Scheduler"
+    ```
+- Notes:
+  - In local mode (`USE_LOCAL_SERVICES=true`) global setup skips Testcontainers and Prisma steps. Run DB setup yourself when needed:
+    ```bash
+    yarn prisma:generate && yarn prisma:migrate && yarn seed
+    ```
+  - Stop services when done:
+    ```bash
+    yarn services:down
+    ```
+
+#### Helpful CLIs
+
+- From `backend/` you can open containerized CLIs:
+  ```bash
+  yarn db:psql     # psql into Postgres (db=testdb, user=test)
+  yarn redis:cli   # open redis-cli against local Redis
+  ```
 
 ### Testcontainers details (backend)
 
@@ -353,6 +565,18 @@ Refund mechanism:
   - Runs `prisma generate` and `prisma migrate deploy` in the backend CWD
   - Emits detailed logs; enable extra logs via `DEBUG=testcontainers*`
 - Per-test setup `backend/src/tests/setup/jest.setup.ts` clears Redis keys and truncates core tables for isolation.
+- Backend test isolation tips (important):
+  - Global `beforeEach` truncates `User`, `Auction`, and `Pledge` tables and clears Redis between tests.
+  - Therefore, create any required test data inside each suite's `beforeEach`, not in `beforeAll`.
+  - Example updated tests: `backend/src/tests/maxPledge.routes.test.ts`, `backend/src/tests/auctionStats.routes.test.ts` create auctions in `beforeEach` and sanity-check via `GET /api/auction/:id`.
+  - Stub external dependencies (e.g., BTC price) in `beforeAll` and restore in `afterAll` to avoid live network during API tests.
+  - Use the shared test factory `backend/src/tests/utils/testFactories.ts#createActiveAuction()` to seed auctions with sensible defaults; pass overrides as needed per test.
+
+#### Redis caching gotchas (tests)
+
+- Controllers and services cache under keys like `btc:price:*` and `auction:*`.
+- Global Jest setup already flushes Redis between tests; if a test asserts TTL or cache-warm behavior, explicitly clear the relevant keys in that test's `beforeEach` (see `bitcoinPriceService.test.ts`, `scheduledTasks.test.ts`).
+- When mocking BTC price with `jest.isolateModules`, ensure the mock is applied before importing `websocket/socketHandler` so the isolated module registry sees the stubbed price service (see `socketHandler.*.test.ts`).
 
 ### Scheduler interval safety
 
@@ -375,6 +599,49 @@ Refund mechanism:
   - Run `prisma generate` and `prisma migrate deploy`
   - Tests clean Redis keys and truncate tables between cases
  - Teardown stops containers automatically.
+
+### Frontend Jest + React Testing Library
+
+- Location: `frontend/src/__tests__/`
+- Runner: Jest (`jsdom` env) with RTL and `whatwg-fetch` polyfill.
+- Config: `frontend/jest.config.ts` (uses `ts-jest` transform with `isolatedModules`), setup at `frontend/jest.setup.ts`.
+- Path aliases supported: `@/` → `frontend/src/`, `@shared/` → `shared/`.
+
+Run:
+```bash
+cd frontend
+yarn test
+```
+
+Key UI test:
+- `frontend/src/__tests__/pledgeFlow.ui.test.tsx`
+  - Verifies pledge lifecycle across `PledgeQueue`, `RecentActivity`, and `AuctionStatus` reacting to mocked fetches and WebSocket events.
+  - Notes: advances fake timers (300ms debounce), scopes assertions with `within()` to the queue, and uses a mock socket exposed on `globalThis`.
+
+#### Additional UI tests (coverage expansion)
+- `frontend/src/__tests__/pledgeQueue.states.test.tsx`
+  - Loading/empty/error states, fetch error messaging, basic guard when `auctionId` is missing.
+- `frontend/src/__tests__/recentActivity.rules.test.tsx`
+  - Limits to 10 newest items, sort order, refunded/confirmed badges with scoped queries.
+- `frontend/src/__tests__/auctionStatus.updates.test.tsx`
+  - Connection/loading banners, active/ended banners, progress bar values and formatted totals.
+- `frontend/src/__tests__/pledgeInterface.validation.test.tsx`
+  - Wallet gating, min/max amount validation, balance checks, and estimated tokens visibility rules.
+- `frontend/src/__tests__/environmentGuard.banner.test.tsx`
+  - Backend fetch error overlay and environment mismatch overlay (scoped assertions within the banner).
+- `frontend/src/__tests__/pledgeQueue.websocket.reconnect.test.tsx`
+  - Simulates WebSocket-driven queue update/reconnect and asserts refetch.
+- `frontend/src/__tests__/recentActivity.transitions.test.tsx`
+  - Mixed refunded/confirmed items and transition from confirmed → refunded.
+
+Notes:
+- Tests rely on `NEXT_PUBLIC_API_URL` defaulting to `http://localhost:5000` and may log a warning; harmless.
+- Wallet and WebSocket hooks are mocked; tests are deterministic and isolated.
+ - Jest setup suppresses only the expected env warning from `PledgeQueue.tsx`; see `frontend/jest.setup.ts`.
+
+Env notes:
+- Tests do not require `NEXT_PUBLIC_API_URL`, but warnings may appear; harmless.
+- Wallet adapters are mocked; no browser wallet needed.
 
 ## Notes
 
@@ -417,7 +684,7 @@ Refund mechanism:
   ```
 - Runtime envs:
   - Frontend: provide `NEXT_PUBLIC_*` at run.
-  - Backend: `PORT` (default 5000), DB/Redis/JWT envs (see `.env.example`).
+  - Backend: `PORT` (default 5000), DB/Redis/JWT envs (see `.env.example`), and `BTC_DEPOSIT_ADDRESS` for the single global deposit address.
 
 ### Backend runtime requirements and CI/CD fixes
 - **Prisma engines (OpenSSL)**: The backend Docker image installs `openssl` in both build and runtime stages, and Prisma `binaryTargets` include `native`, `debian-openssl-1.1.x`, and `debian-openssl-3.0.x` in `backend/prisma/schema.prisma`. This prevents query engine mismatches on Debian-based images.

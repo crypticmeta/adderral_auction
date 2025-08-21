@@ -8,6 +8,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AppProviders from "@/components/AppProviders";
 import Header from "@/components/Header";
+import EnvironmentGuard from "@/components/EnvironmentGuard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,6 +42,7 @@ export default function RootLayout({
       >
         <AppProviders>
           <Header />
+          <EnvironmentGuard />
           {children}
         </AppProviders>
       </body>

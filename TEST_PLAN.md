@@ -1,213 +1,153 @@
-<!-- File: TEST_PLAN.md | Purpose: End-to-end test checklist for Adderrels Auction Platform -->
-# Adderrels Auction Platform — Test Plan
+<!-- File: TEST_PLAN.md | Purpose: Concise, automation-first test plan (v1.0) for Adderrels Auction -->
+## 3.1) Automated Frontend Tests (Jest + RTL)
 
-Use this checklist to verify core flows, real-time behavior, UI consistency, and error handling across frontend and backend. All paths are relative to the repo root.
+Existing:
+- [x] `frontend/src/__tests__/pledgeFlow.ui.test.tsx`
+  - Verifies pledge lifecycle across `PledgeQueue`, `RecentActivity`, and `AuctionStatus` using mocked fetch and WebSocket.
+  - Uses fake timers to advance the 300ms debounce in `PledgeQueue` and `within()` to scope assertions.
 
-Legend:
-- [Automated] = Covered by backend Jest tests
-- [Manual] = Needs manual/E2E verification
+- [x] `frontend/src/__tests__/pledgeQueue.states.test.tsx`
+  - Loading/empty/error states; fetch error/user messaging; missing auctionId guard.
+- [x] `frontend/src/__tests__/recentActivity.rules.test.tsx`
+  - Max 10 items, sorted by timestamp desc; exact badge rendering for refunded/confirmed.
+  - Avatar seed stability (DiceBear) derived from address; BTC address truncation rules.
+- [x] `frontend/src/__tests__/pledgeInterface.validation.test.tsx`
+  - Wallet connection gating; min/max validation; balance gating; estimated tokens display rules.
+- [x] `frontend/src/__tests__/environmentGuard.banner.test.tsx`
+  - Backend status fetch error overlay; environment mismatch banner; scoped queries.
+- [x] `frontend/src/__tests__/auctionStatus.updates.test.tsx`
+  - Connection/loading banners; active/ended banners; progress bar and formatted totals.
 
-## Automated Tests
+Newly added edge-case tests:
+- [x] `frontend/src/__tests__/pledgeQueue.websocket.reconnect.test.tsx`
+  - Simulates WS-driven queue updates (reconnect/change) and asserts refetch behavior.
+- [x] `frontend/src/__tests__/recentActivity.transitions.test.tsx`
+  - Mixed refunded/confirmed items and transition from confirmed → refunded with rerender.
+- [x] `frontend/src/__tests__/websocketContext.reconnect.test.tsx`
+  - Connect → auth → disconnect → timed reconnect → auth; asserts context flags update.
 
-All backend automated tests run against real services:
-- Real Postgres and Redis via Testcontainers (ephemeral containers)
-- Live HTTP requests for Bitcoin price (no mocks)
-- Internet access and Docker daemon are required
+How to run:
+```bash
+cd frontend
+yarn test
+```
 
-### Bitcoin Price Service (Backend)
-- [x] BTC price fetched and cached; values refresh every ~15 minutes [Automated]
-- [x] If price fetch fails, backend sets `priceError: true` [Automated]
-- Caching behavior (source: `backend/src/services/bitcoinPriceService.ts`)
-  - Median across sources cached to `btc:price:usd` (30m) and `btc:price:usd:long` (3d)
-  - Reads within TTL return cached value
-  - `refreshBitcoinPrice()` overwrites both cache keys
-- Scheduler cadence (source: `backend/src/services/scheduledTasks.ts`)
-  - Runs on boot, then every 15 minutes
-  - Warm threshold respected: if `ttl(btc:price:usd) > 300`, refresh is skipped
-- Failure semantics (source: `backend/src/websocket/socketHandler.ts`)
-  - On fetch failure, WS `auction_status` has `priceError: true`, `currentPrice: 0`, `currentMarketCap: 0`
+Planned next tests (frontend):
+- Optional a11y assertions (low priority): role-based queries for banners/lists; focus management on error overlays.
 
-Tests:
-- `backend/src/tests/bitcoinPriceService.test.ts`
-- `backend/src/tests/scheduledTasks.test.ts`
-- `backend/src/tests/socketHandler.price.test.ts`
-
-Run: from `backend/` run `yarn test` (ensure Docker is running and internet is available)
-
-Environment & setup details:
-- Global setup `backend/src/tests/setup/testcontainers.setup.ts` starts Postgres/Redis containers, sets env vars, and runs Prisma generate/migrate with detailed logs (`DEBUG=testcontainers*` optional)
-- Per-test setup `backend/src/tests/setup/jest.setup.ts` truncates core tables and clears Redis keys between tests
-
-Scheduler interval safety:
-- Scheduler uses a 15m interval with `.unref()` and exposes `stopBitcoinPriceRefresh()`; tests call this in `afterEach` to prevent timer leaks
-
-Troubleshooting:
-- If Jest hangs or reports leaked handles, try `yarn test --detectOpenHandles`
-- Verify Docker is running and images can be pulled; confirm outbound network for price APIs
-
-### WebSocket Payload (Backend)
-- Planned automated tests:
-  - [ ] Validate completeness of `auction_status` payload fields across scenarios (active, ended, ceiling reached)
-  - [ ] Verify `ceilingReached` toggles correctly as market cap crosses threshold
-  - [ ] Ensure `remainingTime` and `serverTime` are consistent and non-negative
-
-### Auction Status & Countdown (Backend + FE unit)
-- Planned automated tests:
-  - [ ] Backend computes countdown inputs consistently (server vs end time)
-  - [ ] FE unit test: countdown formatter renders HH:MM:SS correctly for edge values (0, <1s, hours>24)
-
-### Backend API (Controllers)
-- Planned automated tests:
-  - [ ] `GET /api/auction/status` returns comprehensive status and proper HTTP codes
-  - [ ] `GET /api/pledges/auction/:auctionId` returns queue items including user addresses
-  - [ ] `GET /api/pledges/max-pledge/:auctionId` returns limits; handles missing auction gracefully
-  - [ ] `POST /api/auth/guest-token` issues token and rejects malformed requests
-
-### Queue Events & Behavior (Backend)
-- Planned automated tests:
-  - [ ] Emission of `pledge_created`, `pledge:processed`, `pledge:queue:update` with correct payloads
-  - [ ] Queue ordering preserved (FIFO) under concurrent inserts
-  - [ ] Robustness when Redis temporarily errors (retry or safe logging)
-
-### Pledge Flow (Validations & Refunds)
-- Planned automated tests:
-  - [ ] Server validation rejects out-of-range pledges (below min / above max)
-  - [ ] Excess pledge marking when near/at ceiling; refund path signaled
-  - [ ] Pledge triggers WS updates to progress metrics
-
-### Refund Mechanics (Backend)
-- Planned automated tests:
-  - [ ] Excess pledge detection when near ceiling; marks refund correctly
-  - [ ] Aggregation of `refundedBTC` reflected in stats and WS payload
-  - [ ] No double-counting of refunds on repeated events
-
-### Recent Activity (Frontend unit)
-- Planned automated tests:
-  - [ ] Merge/sort logic of queue + activity feed limited to 10 items
-  - [ ] Badge logic: In Queue / Processed / Refunded / Confirmed
-  - [ ] DiceBear avatar seeding stable by address (snapshot-friendly)
-
-### Error Handling & Null-Safety (Frontend unit)
-- Planned automated tests:
-  - [ ] Key components render without crashing when props/state are null/missing (`AuctionStatus`, `PledgeQueue`, `PledgeInterface`)
-  - [ ] User-friendly error banners/messages appear on network/API errors
-
-## Manual Tests
-
-### WebSocket & Debug Window
-- Section default: [Manual]
-- [x] When `NEXT_PUBLIC_APP_ENV=development`, Debug Window appears
-- [x] Logs inbound/outbound/system/error events
-- [x] Copy All and Clear actions work
-
-### Auction Status & Countdown
-- Section default: [Manual]
-- [ ] `auction_status` payload includes `id`, `totalTokens`, `ceilingMarketCap`, `currentMarketCap`, `refundedBTC`, `minPledge`, `maxPledge`, `startTime`, `endTime`, `serverTime`, `ceilingReached` (core covered in automated WS test)
-- [ ] Frontend reads `auctionState.id` for API routing
-- [ ] Countdown synchronizes with `endTimeMs`/`serverTimeMs` and ticks smoothly
-- [ ] Animated auction progress bar reacts to status updates
-
-### Bitcoin Price Service (Frontend UI)
-- Section default: [Manual]
-- [ ] Frontend disables pledge UI and shows a banner until recovery [Manual]
-  - [ ] Manual test steps
-    - [ ] Clear caches and force a fetch: delete `btc:price:usd` and `btc:price:usd:long`; load app to trigger `auction_status`; verify caches are created
-    - [ ] Verify TTLs: confirm `btc:price:usd` ≈ 1800s and `btc:price:usd:long` ≈ 259200s
-    - [ ] Simulate failure: temporarily block outbound requests or point hosts to invalid endpoints; reload app; verify `priceError: true` in WS payload and logs
-    - [ ] Recovery: restore network; wait for scheduler or trigger refresh; verify `priceError` flips to false and `currentPrice > 0`
-  - [ ] Frontend UI behavior (source: `frontend/src/components/PledgeContainer.tsx`)
-    - [ ] When `priceError` is true, a red banner shows: “Live BTC price is currently unavailable. Pledging is temporarily disabled.”
-    - [ ] `PledgeInterface` receives `isWalletConnected && !priceError && isAuctionActive`; verify `button-pledge` is disabled while `priceError` is true and re-enables on recovery
+### Next Up (shortlist)
+- [x] [frontend] Unit tests for `WebSocketContext` reconnect flow (re-subscribe/state reset on reconnect).
+- [x] [frontend] Avatar seed/truncation assertions in `recentActivity.rules.test.tsx`
+- [backend] Tests for `GET /api/pledges/max-pledge/:auctionId` success and error handling (400/404) and numeric bounds.
+- [backend] Tests for `GET /api/auction/:id/stats` shape and caching semantics (Redis set/get).
+- [ci] Enforce Jest coverage thresholds: 70% lines/branches frontend; 70% backend to start.
 
 
-### Pledge Flow (FCFS)
-- Section default: [Manual]
-- [ ] Connect a wallet (or guest auth) succeeds
-- [ ] Create pledge within limits succeeds
-- [ ] Pledge triggers real-time updates (progress bar, totals)
-- [ ] Excess pledges over ceiling are marked for refund
-- [ ] After processing, refunded amounts are reflected
+# Test Plan v1.0 (Automation-first)
 
-### Queue Limits & Validation
-- Section default: [Manual]
-- [ ] `PledgeQueue` fetches min/max limits only via API `/api/pledges/max-pledge/:auctionId` (no WS fallback)
-- [ ] UI shows subtle error note if limits cannot be fetched
-- [ ] Client-side validation prevents out-of-range pledges
+Goals:
+- Maximize automated coverage; keep manual checks minimal.
+- Validate multi-wallet pledge creation persists full user details.
+- Validate key UI states and accessibility quickly.
 
-### Redis Pledge Queue Behavior
-- Section default: [Manual]
-- [ ] Pledges appear in queue in order
-- [ ] WebSocket events fire:
-  - [ ] `pledge_created`
-  - [ ] `pledge:processed`
-  - [ ] `pledge:queue:update`
-- [ ] Queue position updates live
-- [ ] Refund flag shown when applicable
+## 1) Scope & Modes
 
-### Recent Activity (Merged with Queue)
-- Section default: [Manual]
-Component: `frontend/src/components/recent-activity.tsx`
-- [ ] Shows random avatars (DiceBear) seeded by address
-- [ ] Displays truncated usernames from addresses
-- [ ] Merges queue items with activity feed; sorted by time; limited to 10
-- [ ] ADDERRELS allocation shows with asterisk: `ADDERRELS*`
-- [ ] Footnote present: `* Estimated; final allocation may vary.`
-- [ ] Tx Status badge for items:
-  - [ ] Queue item pending → `In Queue`
-  - [ ] Queue item processed → `Processed`
-  - [ ] Queue item processed + refund → `Refunded`
-  - [ ] Non-queue confirmed activity → `Confirmed`
-- [ ] Live updates: on `pledge_created`, `pledge:processed`, `pledge:queue:update`, feed refreshes without page reload
-- [ ] New items slide in (opacity/translate) upon arrival
+- Backend: Express + Socket.IO + Prisma (Postgres) + Redis.
+- Frontend: Next.js + TypeScript + Tailwind.
+- Tests run in two modes:
+  - Default: Testcontainers (ephemeral Postgres/Redis).
+  - Local: persistent services via `backend/docker-compose.test.yml` with `USE_LOCAL_SERVICES=true`.
 
-### Pledge Queue UI
-- Section default: [Manual]
-Component: `frontend/src/components/PledgeQueue.tsx`
-- [ ] Random avatars and truncated usernames visible
-- [ ] Estimated ADDERRELS per pledge computed client-side from `auctionState`
-- [ ] Real-time updates on queue events
+## 2) Environment & Setup
 
-### Pledge Form
-- Section default: [Manual]
-Component: `frontend/src/components/PledgeForm.tsx`
-- [ ] Uses `auctionState.ceilingReached` (no `auctionStatus` reference)
-- [ ] Fetches max pledge info via API (no WS fallback)
-- [ ] Proper input validation and error handling
+- Required envs: `DATABASE_URL`, `REDIS_URL`, `BTC_DEPOSIT_ADDRESS`, JWT, network flags.
+- Local mode requires manual Prisma steps: `yarn prisma:generate && yarn prisma:migrate && yarn seed`.
+- Run tests:
+  - Ephemeral: `yarn test` (from `backend/`, Docker required).
+  - Local: `yarn services:up` → set envs → `yarn test:local` → `yarn services:down`.
 
-### Backend API
-- Section default: [Manual]
-- [ ] `GET /api/auction/status` returns comprehensive status
-- [ ] `GET /api/pledges/auction/:auctionId` returns queue items with user addresses
-- [ ] `GET /api/pledges/max-pledge/:auctionId` returns limits
-- [ ] `POST /api/auth/guest-token` issues token
+Backend test isolation tips (important):
+- Global Jest `beforeEach` in `backend/src/tests/setup/jest.setup.ts` truncates `User`, `Auction`, and `Pledge` tables and clears Redis between tests.
+- Always create required fixtures inside each suite's `beforeEach` (not `beforeAll`).
+- Example suites following this pattern:
+  - `backend/src/tests/maxPledge.routes.test.ts`
+  - `backend/src/tests/auctionStats.routes.test.ts`
+  - They also perform a quick sanity `GET /api/auction/:id` check after creating the auction.
 
-### Refund Mechanics
-- Section default: [Manual]
-- [ ] When ceiling would be exceeded, pledge marked excess
-- [ ] Excess amounts refunded; reflected in totals and UI badges
+## 3) Automated Backend Tests
 
-### Auction End Conditions
-- Section default: [Manual]
-- [ ] Ends immediately when ceiling reached
-- [ ] Ends at 72 hours otherwise
-- [ ] UI reflects end state; pledging disabled
+Existing:
+- [x] `src/tests/bitcoinPriceService.test.ts`: cache TTLs (short/long), live HTTP sources.
+- [x] `src/tests/scheduledTasks.test.ts`: immediate refresh, warm-threshold, interval unref safety.
+- [x] `src/tests/socketHandler.price.test.ts`: `priceError` semantics and computed fields.
 
-### Dev-only Reset (if enabled in your env)
-- Section default: [Manual]
-- [ ] Reset endpoint available only in non-production
-- [ ] Triggering reset truncates core tables (`User`, `Auction`, `Pledge`, `RefundedPledge`) and reseeds admin + test data
-- [ ] Redis auction caches (`auction:*`) are purged
-- [ ] New 72-hour auction is created and broadcast to clients
-- [ ] Frontend reset button visible in dev and functions without auth token
-- [ ] Page reloads after reset
+New (added):
+- [x] `src/tests/statusRoutes.test.ts`: `GET /api/status` returns `{ network, testing, nodeEnv, btcUsd }` with btcUsd as number|null.
+- [x] `src/tests/socketHandler.payload.test.ts`:
+  - Validates `auction_status` payload completeness: `id, totalTokens, ceilingMarketCap, currentMarketCap, refundedBTC, minPledge, maxPledge, startTime, endTime, serverTime, remainingTime, ceilingReached, currentPrice, priceError, pledges[]` (with user addresses).
+  - Scenarios:
+    - price available → `priceError=false`, computed fields > 0 as expected.
+    - price unavailable → `priceError=true`, price-dependent fields zeroed.
+    - ceiling reached → `ceilingReached=true` when `totalBTCPledged * price >= ceilingMarketCap`.
+ - [x] `src/tests/pledgeFlow.e2e.test.ts`:
+   - End-to-end pledge creation: `POST /api/pledges` → 201 with canonical `satsAmount` and `queuePosition`.
+   - Persists DB row (`Pledge`) with txid and wallet details; enqueues in Redis sorted set (`auction:pledge:queue`).
+   - Emits WS events: `pledge_created` and `pledge:queue:position`.
+   - Allows multiple pledges from same user (no unique constraint on `(userId, auctionId)`).
+   - Rejects 400 on missing required fields (null checks for `userId`, `satsAmount`, `walletDetails`, `txid`).
 
-### Accessibility
-- Section default: [Manual]
-- [ ] Progress bar has correct role and ARIA attributes
-- [ ] Color contrast meets basic readability standards
+Planned next tests (backend):
+- Pledge queue endpoints and limits:
+  - `GET /api/auction/:id/stats` returns stats for seeded auction.
+  - `GET /api/pledges/auction/:auctionId` returns queue with user addresses.
+  - `GET /api/pledges/max-pledge/:auctionId` returns min/max and USD equivalents; graceful 404/400 handling.
+- Auth:
+  - `POST /api/auth/guest-id` returns `{ guestId }`; rejects with 400 when unexpected body is provided.
+- Pledge validations:
+  - Reject below-min / above-max, duplicate constraints (where applicable), and missing txid.
 
-### Error Handling & Null-Safety
-- Section default: [Manual]
+## 4) Critical End-to-End Validations (Automated-first)
+
+- Multi-wallet pledge persistence (critical):
+  - Controller test: `POST /api/auction/connect-multi-wallet` stores both cardinal and ordinal details on `User` (with null checks).
+  - Pledge creation test: `POST /api/pledges` persists `Pledge` with full `walletDetails`, `txid`, and associates user addresses.
+  - WS: `auction_status.pledges[]` includes `cardinal_address` and `ordinal_address` for recent pledges.
+
+## 5) Minimal Manual Checks (only what can’t be unit-tested fast)
+
+- WebSocket Debug Window (dev): appears when `NEXT_PUBLIC_APP_ENV=development`; logs events and actions function.
+- UI critical paths (visual and a11y spot-check):
+  - Pledge form disables when `priceError=true`; re-enables on recovery.
+  - Countdown shows non-negative time and ticks; progress bar updates with WS events.
+  - Recent Activity displays 10 items max, badges correct, avatars seeded by address.
+
+## 6) Frontend Unit Targets (fast, automated)
+
+- Null-safety of key components (`AuctionStatus`, `PledgeQueue`, `PledgeInterface`): render without crash when props/state are null/undefined.
+- Countdown formatter edge cases: `0`, `<1s`, `>24h`.
+- Recent Activity merging and sorting by time; limit to 10; badge logic.
+
+## 7) How to Run
+
+- Backend ephemeral: `yarn test`.
+- Backend local: `yarn services:up` → set `DATABASE_URL`/`REDIS_URL` → `yarn prisma:generate && yarn prisma:migrate && yarn seed` → `yarn test:local` → `yarn services:down`.
+- Troubleshooting: `yarn test --detectOpenHandles` for leaked handles.
+
+Frontend:
+```bash
+cd frontend
+yarn test
+```
+
+Setup notes:
+- Jest setup suppresses the expected env warning from `PledgeQueue.tsx` about `NEXT_PUBLIC_API_URL` defaulting; other warnings are forwarded. See `frontend/jest.setup.ts`.
+
+## 8) CI Criteria
+
+- All backend suites pass in ephemeral mode on clean environment.
+- Flake-free within 2 retries; no leaked handles.
+- Documentation parity: README reflects test modes and new test files.
+- Frontend Jest suite passes consistently (no act/timer leaks), stable across Node 20.
 - [ ] All pages/components render without crashing when data is null/missing
 - [ ] Network/API errors display user-friendly messages
 
