@@ -505,6 +505,34 @@ NEXT_PUBLIC_TESTING=true
 - Tests run against real Postgres and Redis using Testcontainers and require internet for live price APIs.
 - Ensure Docker is running; then from `backend/` run `yarn test`.
 
+### Hybrid local services for backend tests (optional)
+
+- Prefer Testcontainers by default. For faster local runs you can reuse persistent local Docker services.
+- Start local Postgres and Redis from `backend/`:
+  ```bash
+  yarn services:up
+  ```
+- Set env for Jest (e.g., in your shell or `.env.test.local` loaded by your environment):
+  ```bash
+  # Postgres (matches docker-compose.test.yml)
+  DATABASE_URL=postgresql://test:test@localhost:5432/testdb?schema=public
+  # Redis (prefer REDIS_URL; falls back to host/port)
+  REDIS_URL=redis://localhost:6379
+  ```
+- Run tests using local services:
+  ```bash
+  yarn test:local
+  ```
+- Notes:
+  - In local mode (`USE_LOCAL_SERVICES=true`) global setup skips Testcontainers and Prisma steps. Run DB setup yourself when needed:
+    ```bash
+    yarn prisma:generate && yarn prisma:migrate && yarn seed
+    ```
+  - Stop services when done:
+    ```bash
+    yarn services:down
+    ```
+
 ### Testcontainers details (backend)
 
 - Global setup `backend/src/tests/setup/testcontainers.setup.ts`:

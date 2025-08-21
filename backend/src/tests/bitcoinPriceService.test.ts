@@ -1,16 +1,16 @@
-// File: backend/src/tests/bitcoinPriceService.test.ts | Purpose: Unit tests for BitcoinPriceService caching and failure paths
+// File: backend/src/tests/bitcoinPriceService.test.ts | Purpose: Unit tests for BitcoinPriceService caching, TTLs, and failure paths
 import { redisClient } from '../config/redis';
 import { bitcoinPriceService, BitcoinPriceService } from '../services/bitcoinPriceService';
 
 const SERVICE = bitcoinPriceService as BitcoinPriceService;
 
-describe('BitcoinPriceService (live HTTP)', () => {
+describe('BitcoinPriceService (live HTTP + Redis TTL verification)', () => {
   beforeEach(async () => {
     await redisClient.del('btc:price:usd');
     await redisClient.del('btc:price:usd:long');
   });
 
-  test('refreshBitcoinPrice fetches live price and caches short/long with TTLs', async () => {
+  test('refreshBitcoinPrice caches btc:price:usd (~30m) and btc:price:usd:long (~3d) with correct TTLs', async () => {
     const price = await SERVICE.refreshBitcoinPrice();
 
     // Basic sanity on live price
@@ -25,9 +25,12 @@ describe('BitcoinPriceService (live HTTP)', () => {
 
     const ttlShort = await redisClient.ttl('btc:price:usd');
     const ttlLong = await redisClient.ttl('btc:price:usd:long');
-    expect(ttlShort).toBeGreaterThan(0);
-    expect(ttlShort).toBeLessThanOrEqual(1800);
-    expect(ttlLong).toBeGreaterThan(24 * 60 * 60);
+    // Short cache should be close to 1800s, but allow some slack for execution time
+    expect(ttlShort).toBeGreaterThan(1500); // >25m
+    expect(ttlShort).toBeLessThanOrEqual(1800); // <=30m
+    // Long cache is configured for 3 days (259200s). Allow <= target and comfortably above 2 days.
+    expect(ttlLong).toBeGreaterThan(2 * 24 * 60 * 60); // >172800s
+    expect(ttlLong).toBeLessThanOrEqual(3 * 24 * 60 * 60); // <=259200s
 
     // Subsequent get should use cache (same value as cached)
     const price2 = await SERVICE.getBitcoinPrice();

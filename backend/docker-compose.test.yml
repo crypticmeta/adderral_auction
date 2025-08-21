@@ -1,0 +1,27 @@
+# File: backend/docker-compose.test.yml | Purpose: Local Postgres and Redis for running backend tests without Testcontainers
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16
+    container_name: acorn_test_postgres
+    environment:
+      POSTGRES_DB: testdb
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d testdb"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    container_name: acorn_test_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
