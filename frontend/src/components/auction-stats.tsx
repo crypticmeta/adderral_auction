@@ -1,40 +1,15 @@
-// Auction stats component showing key auction metrics, with a highlight on total raised
+// Auction stats component showing key auction metrics (Raised card removed as progress is visible elsewhere)
 interface AuctionStatsProps {
     totalTokens: string;
     ceilingMarketCap: string; // in millions string, e.g., "15"
     currentMarketCap?: string; // in millions string, e.g., "4.25"
     duration: string; // in hours
-    totalRaisedBTC?: number; // highlight value
 }
 
-export function AuctionStats({ totalTokens, ceilingMarketCap, currentMarketCap, duration, totalRaisedBTC }: AuctionStatsProps) {
-    // Null-safe computations
-    const ceilM = Number(ceilingMarketCap ?? '0');
-    const currM = Number(currentMarketCap ?? '0');
-    const pct = ceilM > 0 ? Math.min(100, Math.max(0, (currM / ceilM) * 100)) : 0;
-
+export function AuctionStats({ totalTokens, ceilingMarketCap, currentMarketCap, duration }: AuctionStatsProps) {
+    // Null-safe values
     return (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-12">
-            {/* Raised so far */}
-            <div className="glass-card p-6 pb-7 rounded-2xl text-center transform hover:scale-105 transition-all duration-300 border border-adderrels-500/30 relative z-10 min-h-[180px]">
-                <div className="w-12 h-12 mx-auto mb-4  bg-orange-500 rounded-full flex items-center justify-center">
-                    <span className="text-xl font-bold">₿</span>
-                </div>
-                <div className="space-y-1 leading-tight">
-                    <div className="text-2xl font-extrabold text-orange-500">
-                        {typeof totalRaisedBTC === 'number' && !Number.isNaN(totalRaisedBTC) ? totalRaisedBTC.toFixed(3) : '0.000'} BTC
-                    </div>
-                    <div className="text-lg font-semibold text-gray-200">
-                        ${currM.toFixed(2)}M
-                    </div>
-                </div>
-                <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs bg-adderrels-500/10 border border-adderrels-500/30">
-                    <span className="h-2 w-2 rounded-full bg-adderrels-500 mr-1.5 animate-pulse" />
-                    <span>{pct.toFixed(1)}% of ceiling</span>
-                </div>
-                <p className="text-gray-400 mt-2">Raised so far</p>
-            </div>
-
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
             {/* Total Tokens */}
             <div className="glass-card p-6 rounded-2xl text-center transform hover:scale-105 transition-all duration-300">
                 <div className="w-12 h-12 mx-auto mb-4 rounded-full overflow-hidden">

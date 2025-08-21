@@ -103,9 +103,9 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Reacts in real time to `auction_status` WebSocket updates
   - Files: `frontend/src/components/auction-progress.tsx`, `frontend/src/app/globals.css`
   - Accessible with `role="progressbar"` and ARIA values
-- **Raised So Far Highlight**
-  - New highlighted stat card in `AuctionStats` showing total BTC raised with a percentage-of-ceiling badge
-  - Prop: `totalRaisedBTC` added to `AuctionStats` and wired from `page.tsx`
+- **UI change: Removed Raised-So-Far card**
+  - The highlighted stat card showing total BTC raised was removed from `AuctionStats` (auction progress is visible elsewhere).
+  - Prop `totalRaisedBTC` has been dropped from `AuctionStats` and its usage removed in `page.tsx`.
   - Files: `frontend/src/components/auction-stats.tsx`, `frontend/src/app/page.tsx`
 - **Footer UI Polish**
   - Glass-card footer with rounded top, blur, and clearer border for readability
