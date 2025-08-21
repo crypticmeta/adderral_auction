@@ -169,6 +169,7 @@ export const sendAuctionStatus = async (socket: any) => {
     // Get auction data from database
     const auction = await prisma.auction.findFirst({
       where: { isActive: true },
+      orderBy: { startTime: 'desc' },
       include: {
         pledges: {
           include: {
