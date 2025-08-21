@@ -438,6 +438,8 @@ NEXT_PUBLIC_TESTING=true
 - Shows estimated ADDERRELS allocation for each pledge based on current totals
 - Realtime updates on `pledge_created`, `pledge:processed`, `pledge:queue:update`
 - Recent Activity merges live queue entries with activity feed and displays a Tx Status badge (In Queue / Processed / Confirmed). Refund states are not shown in the UI.
+ - Allocation info: an info icon in the Allocation column header toggles the formula panel. Formula used: `tokens = (totalTokens / totalPledgedBTC) × pledgeBTC`, where `totalPledgedBTC` includes processed + pending pledges. The table lists only pending pledges.
+ - Highlighting: pending pledges by the connected wallet are highlighted in the table for quick visibility.
 
 ### Backend
 - Node + TypeScript + Express

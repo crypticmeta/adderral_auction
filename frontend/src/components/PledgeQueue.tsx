@@ -3,9 +3,10 @@
 // Shows recent pledge activity with user avatars (random via DiceBear),
 // truncated usernames from addresses, real-time queue updates, and
 // estimated ADDERRELS allocations per pledge based on current auction totals.
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useWalletAddress } from 'bitcoin-wallet-adapter';
 import { useWebSocket } from '../contexts/WebSocketContext';
-import type { PledgeItem, MaxPledgeInfo, QueuePositionEvent } from '@shared/types/common';
+import type { PledgeItem, QueuePositionEvent } from '@shared/types/common';
 
 interface PledgeQueueProps {
   auctionId: string;
@@ -16,18 +17,30 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
   const [userPledges, setUserPledges] = useState<PledgeItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [maxPledgeInfo, setMaxPledgeInfo] = useState<MaxPledgeInfo | null>(null);
-  
+  const [showInfo, setShowInfo] = useState(false);
+  // Removed local min/max limits display from queue to keep UI focused
+
   const { socket, isAuthenticated, auctionState } = useWebSocket();
+  const wallet = useWalletAddress();
   const mountedRef = useRef(true);
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   const getUsername = (p: PledgeItem): string => {
-    const addr = p?.user?.ordinal_address || p?.user?.cardinal_address || p?.userId || '';
+    const addr = p?.user?.cardinal_address || p?.user?.ordinal_address || p?.userId || '';
     if (!addr) return 'guest';
     const s = String(addr);
     if (s.length <= 10) return s;
     return `${s.slice(0, 6)}...${s.slice(-4)}`;
+  };
+
+  const toLower = (val?: string | null): string => (typeof val === 'string' ? val.toLowerCase() : '');
+  const isConnectedUsersPledge = (p: PledgeItem): boolean => {
+    const userCard = toLower(p?.user?.cardinal_address);
+    const userOrd = toLower(p?.user?.ordinal_address);
+    const wCard = toLower(wallet?.cardinal_address as string | undefined);
+    const wOrd = toLower(wallet?.ordinal_address as string | undefined);
+    if (!wCard && !wOrd) return false;
+    return ((!!userCard && !!wCard && userCard === wCard) || (!!userOrd && !!wOrd && userOrd === wOrd));
   };
 
   const getAvatar = (p: PledgeItem): string => {
@@ -40,10 +53,19 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
     return Number(n).toLocaleString(undefined, { maximumFractionDigits: maxFrac });
   };
 
+  // Approximation base: include all pledged (processed + pending)
+  const totalRaisedApproxBTC = useMemo(() => {
+    const processedRaised = typeof auctionState?.totalRaised === 'number' ? auctionState.totalRaised : 0;
+    const pendingRaised = queuedPledges
+      .filter(p => !p.processed)
+      .reduce((acc, p) => acc + (p.satsAmount / 1e8), 0);
+    return processedRaised + pendingRaised;
+  }, [auctionState?.totalRaised, queuedPledges]);
+
   const estimateAllocation = (btcAmount: number): number | null => {
     const totalTokensStr = auctionState?.config?.totalTokens;
-    const totalRaisedBTC = auctionState?.totalRaised;
-    if (!totalTokensStr || typeof totalRaisedBTC !== 'number' || !(totalRaisedBTC > 0)) return null;
+    const totalRaisedBTC = totalRaisedApproxBTC;
+    if (!totalTokensStr || !(totalRaisedBTC > 0)) return null;
     const totalTokens = Number(totalTokensStr);
     if (!(totalTokens > 0)) return null;
     // tokens = (totalTokens / totalRaisedBTC) * pledgeBTC
@@ -56,43 +78,9 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
       console.warn('NEXT_PUBLIC_API_URL not set. Using default http://localhost:5000');
     }
   }, []);
-  
-  // Fetch max pledge info
-  useEffect(() => {
-    const fetchMaxPledgeInfo = async () => {
-      try {
-        const response = await fetch(`${apiUrl}/api/pledges/max-pledge/${auctionId}`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch max pledge info');
-        }
-        const data = await response.json();
-        if (mountedRef.current) setMaxPledgeInfo(data);
-      } catch (err) {
-        if (mountedRef.current) setError(err instanceof Error ? err.message : 'Failed to fetch max pledge info');
-      }
-    };
-    
-    if (!auctionState?.ceilingReached) {
-      fetchMaxPledgeInfo();
-    }
 
-    // Subscribe to real-time events and refetch limits immediately
-    if (socket && isAuthenticated) {
-      const refetchLimits = () => fetchMaxPledgeInfo();
-      socket.on('pledge:queue:update', refetchLimits);
-      socket.on('pledge:created', refetchLimits);
-      socket.on('pledge:processed', refetchLimits);
-    }
+  // Removed fetching of max pledge info here (handled by pledge form)
 
-    return () => {
-      if (socket) {
-        socket.off('pledge:queue:update');
-        socket.off('pledge:created');
-        socket.off('pledge:processed');
-      }
-    };
-  }, [auctionId, apiUrl, socket, isAuthenticated, auctionState?.ceilingReached]);
-  
   // Fetch pledges in queue
   useEffect(() => {
     if (!auctionId) return;
@@ -101,9 +89,14 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
     const fetchPledges = async () => {
       try {
         if (mountedRef.current) setIsLoading(true);
-        const response = await fetch(`${apiUrl}/api/auction/${auctionId}/pledges`);
+        const response = await fetch(`${apiUrl}/api/auction/${auctionId}/pledges?t=${Date.now()}`, { cache: 'no-store' });
         if (!response.ok) {
-          throw new Error('Failed to fetch pledges');
+          // Handle 304 gracefully: keep existing data, stop loading
+          if (response.status === 304) {
+            if (mountedRef.current) setIsLoading(false);
+            return;
+          }
+          throw new Error(`Failed to fetch pledges (${response.status})`);
         }
         const data = await response.json();
         // Map backend fields to canonical UI shape with satsAmount
@@ -132,7 +125,7 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
         if (mountedRef.current) setIsLoading(false);
       }
     };
-    
+
     const debounceFetch = () => {
       if (timerRef.id) clearTimeout(timerRef.id);
       timerRef.id = setTimeout(() => { fetchPledges(); }, 300) as any;
@@ -141,15 +134,15 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
     if (!auctionState?.ceilingReached) {
       fetchPledges();
     }
-    
+
     // Set up WebSocket listeners for real-time queue updates
     if (socket && isAuthenticated) {
       socket.on('pledge:created', (data: any) => { if (data?.auctionId === auctionId) debounceFetch(); });
-      
+
       socket.on('pledge:processed', (data: any) => {
         if (data?.auctionId === auctionId) debounceFetch();
       });
-      
+
       socket.on('pledge:queue:update', (d: any) => { if (!d || d?.auctionId === auctionId) debounceFetch(); });
 
       // Optional: update live queue position for a pledge
@@ -161,7 +154,7 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
         setQueuedPledges(prev => prev.map(p => p.id === pledgeId ? { ...p, queuePosition: Number(pos) } : p));
       });
     }
-    
+
     return () => {
       if (socket) {
         socket.off('pledge:created');
@@ -171,37 +164,37 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
       }
     };
   }, [auctionId, apiUrl, socket, isAuthenticated, auctionState?.ceilingReached]);
-  
+
   // Fetch user pledges
   useEffect(() => {
     const fetchUserPledges = async () => {
       try {
         const token = localStorage.getItem('guestToken');
         if (!token) return;
-        
+
         const userId = localStorage.getItem('userId');
         if (!userId) return;
-        
+
         const response = await fetch(`${apiUrl}/api/pledges/user/${userId}/auction/${auctionId}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        
+
         if (!response.ok) {
           throw new Error('Failed to fetch user pledges');
         }
-        
+
         const data = await response.json();
         setUserPledges(data);
       } catch (err) {
         console.error('Error fetching user pledges:', err);
       }
     };
-    
+
     fetchUserPledges();
   }, [auctionId, apiUrl]);
-  
+
   if (isLoading) {
     return (
       <div className="bg-gradient-to-br from-dark-800/50 to-dark-700/50 backdrop-blur-md border border-primary-500/30 rounded-xl p-6 transition-all hover:border-primary-500/60 hover:shadow-glow-md">
@@ -212,78 +205,40 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
       </div>
     );
   }
-  
+
   return (
     <div className="bg-gradient-to-br from-dark-800/50 to-dark-700/50 backdrop-blur-md border border-primary-500/30 rounded-xl p-6 transition-all hover:border-primary-500/60 hover:shadow-glow-md">
       <h2 className="text-2xl font-semibold mb-2 text-white">Pledge Queue</h2>
-      
-      {error ? (
+
+      {error && (
         <div className="bg-gradient-to-r from-red-600/20 to-red-700/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg mb-4 text-sm">
           {error}
         </div>
-      ) : (
-        !maxPledgeInfo && (
-          <div className="bg-dark-900/40 border border-white/5 text-gray-400 px-4 py-2 rounded-lg mb-4 text-xs">
-            Attempting to load pledge limits...
-          </div>
-        )
       )}
-      
-      {maxPledgeInfo && (
-        <div className="bg-gradient-to-r from-blue-600/20 to-blue-700/20 border border-blue-500/30 text-blue-400 px-4 py-3 rounded-lg mb-4">
-          <h3 className="font-semibold mb-2">Current Pledge Limits</h3>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div>
-              <span className="text-gray-400">Min Pledge:</span>
-              <span className="ml-2">{((maxPledgeInfo.minPledgeSats ?? 0) / 1e8).toFixed(8)} BTC</span>
-            </div>
-            <div>
-              <span className="text-gray-400">Max Pledge:</span>
-              <span className="ml-2">{((maxPledgeInfo.maxPledgeSats ?? 0) / 1e8).toFixed(8)} BTC</span>
-            </div>
-            <div>
-              <span className="text-gray-400">BTC Price:</span>
-              <span className="ml-2">{maxPledgeInfo.currentBTCPrice ? `$${maxPledgeInfo.currentBTCPrice.toLocaleString()}` : '—'}</span>
-            </div>
-          </div>
-        </div>
-      )}
-      
+
       {userPledges.length > 0 && (
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-3 text-white">Your Pledges</h3>
           <div className="space-y-2">
             {userPledges.map((pledge) => (
-              <div 
+              <div
                 key={pledge.id}
-                className={`p-3 rounded-lg border ${
-                  pledge.processed 
-                    ? pledge.needsRefund 
-                      ? 'bg-amber-600/10 border-amber-500/30 text-amber-400' 
-                      : 'bg-green-600/10 border-green-500/30 text-green-400'
+                className={`p-3 rounded-lg border ${pledge.processed
+                    ? 'bg-green-600/10 border-green-500/30 text-green-400'
                     : 'bg-blue-600/10 border-blue-500/30 text-blue-400'
-                }`}
+                  }`}
               >
                 <div className="flex justify-between items-center">
                   <div>
                     <span className="font-semibold">{(pledge.satsAmount / 1e8).toFixed(8)} BTC</span>
                     <div className="text-xs mt-1">
                       {pledge.processed ? (
-                        pledge.needsRefund ? (
-                          <span className="flex items-center">
-                            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                            </svg>
-                            Needs Refund
-                          </span>
-                        ) : (
-                          <span className="flex items-center">
-                            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                            Processed
-                          </span>
-                        )
+                        <span className="flex items-center">
+                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                          Processed
+                        </span>
                       ) : (
                         <span className="flex items-center">
                           <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -306,10 +261,9 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
           </div>
         </div>
       )}
-      
+
       <div>
-        <h3 className="text-lg font-semibold mb-3 text-white">Recent Pledges</h3>
-        {queuedPledges.length === 0 ? (
+        {queuedPledges.filter(p => !p.processed).length === 0 ? (
           <div className="text-center py-6 text-gray-400">
             No pledges in the queue yet
           </div>
@@ -323,15 +277,29 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
                   <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                     Amount
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Allocation</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                    <div className="flex items-center gap-2">
+                      <span>Allocation</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowInfo(v => !v)}
+                        className="text-gray-400 hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500/50 rounded"
+                        aria-label="Show allocation formula info"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fillRule="evenodd" d="M18 10A8 8 0 11.001 9.999 8 8 0 0118 10zM9 7a1 1 0 102 0 1 1 0 00-2 0zm2 2a1 1 0 10-2 0v4a1 1 0 102 0V9z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  </th>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                     Status
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-dark-800/30 divide-y divide-gray-700">
-                {queuedPledges.slice(0, 10).map((pledge) => (
-                  <tr key={pledge.id}>
+                {queuedPledges.filter(p => !p.processed).slice(0, 10).map((pledge) => (
+                  <tr key={pledge.id} className={`${isConnectedUsersPledge(pledge) ? 'bg-primary-500/10' : ''}`}>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       <div className="flex items-center gap-3">
                         <img src={getAvatar(pledge)} alt="avatar" className="w-7 h-7 rounded-full bg-dark-900/50 border border-white/10" />
@@ -347,15 +315,9 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       {pledge.processed ? (
-                        pledge.needsRefund ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                            Needs Refund
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Processed
-                          </span>
-                        )
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Processed
+                        </span>
                       ) : (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           In Queue
@@ -366,6 +328,15 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
                 ))}
               </tbody>
             </table>
+            {showInfo && (
+              <div className="px-4 py-2 text-[11px] text-gray-300 border-t border-gray-700 bg-dark-900/60">
+                Allocation approximation: tokens = (totalTokens / totalPledgedBTC) × pledgeBTC.
+                totalPledgedBTC includes processed + pending pledges. Table shows only pending pledges.
+              </div>
+            )}
+            <div className="px-4 py-2 text-[11px] text-gray-400 border-t border-gray-700 bg-dark-900/40">
+              Note: Expected allocation is an approximation based on total tokens and total pledged (processed + pending) and may change as pledges are processed.
+            </div>
           </div>
         )}
       </div>
