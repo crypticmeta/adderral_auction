@@ -1,4 +1,6 @@
 // File: PledgeInterface.tsx - Modern pledge UI; disables when BTC price unavailable or wallet not connected. Shows wallet BTC/USD balance. Testing mode shows demo $100k USD-equivalent balance; verification handled on backend.
+// Update: Added pledge amount slider with 25/50/75/100% checkpoints (100% leaves 10,000 sats for fees). Syncs with input.
+// Update: Displays USD equivalent of entered BTC pledge using live BTC price (with null checks).
 // Note: Builds CreatePledgeRequest with canonical satsAmount (BTC optional for back-compat). This UI does not initiate payment; non-testing pledges will fail without txid.
 import React, { useEffect, useMemo, useState } from 'react';
 import type { WalletDetails, CreatePledgeRequest } from '@shared/types/common';
@@ -23,6 +25,7 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
   const [pledgeAmount, setPledgeAmount] = useState<string>(''); // BTC amount as string
   const [isPending, setIsPending] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success'; title: string; description?: string } | null>(null);
+  const [sliderPercent, setSliderPercent] = useState<number>(0); // 0..100
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
   const { auctionState } = useWebSocket();
@@ -96,6 +99,12 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
     return Number.isFinite(btc) ? btc : 0;
   }, [isTesting, priceUsd]);
 
+  // Effective spendable balance in BTC (testing uses demo balance when available)
+  const effectiveBalanceBtc = useMemo(() => {
+    if (isTesting && demoMaxBtc > 0) return demoMaxBtc;
+    return confirmedBtc;
+  }, [isTesting, demoMaxBtc, confirmedBtc]);
+
   const usdBalance = useMemo(() => {
     // Prefer backend conversion first
     if (priceUsd > 0) return confirmedBtc * priceUsd;
@@ -107,13 +116,23 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
 
   const estimatedTokens = useMemo(() => {
     if (!pledgeAmount) return 0;
-    const amt = parseFloat(pledgeAmount);
-    if (isNaN(amt) || !currentPrice || currentPrice <= 0) return 0;
-    // Example: currentPrice is USD/token; convert BTC->USD amount then divide by price
-    // If your currentPrice is already BTC/token, adjust accordingly.
-    const btcUsd = 0; // unknown here; estimation relies on server-side. Keep 0 if unknown.
-    return Math.max(0, Math.floor((btcUsd * amt) / currentPrice));
-  }, [pledgeAmount, currentPrice]);
+    const amtBtc = parseFloat(pledgeAmount);
+    if (!Number.isFinite(amtBtc) || amtBtc <= 0) return 0;
+    // Convert pledge BTC -> USD using priceUsd, then divide by currentPrice (USD/token)
+    if (!Number.isFinite(priceUsd) || priceUsd <= 0) return 0;
+    if (!Number.isFinite(currentPrice) || currentPrice <= 0) return 0;
+    const pledgeUsd = amtBtc * (priceUsd as number);
+    const tokens = pledgeUsd / (currentPrice as number);
+    return tokens > 0 ? Math.floor(tokens) : 0;
+  }, [pledgeAmount, priceUsd, currentPrice]);
+
+  // USD equivalent for the entered BTC amount (null when price or amount unavailable)
+  const pledgeUsd = useMemo(() => {
+    const amtBtc = parseFloat(pledgeAmount || '');
+    if (!Number.isFinite(amtBtc) || amtBtc <= 0) return null;
+    if (!Number.isFinite(priceUsd) || priceUsd <= 0) return null;
+    return amtBtc * (priceUsd as number);
+  }, [pledgeAmount, priceUsd]);
 
   const exceedsBalance = useMemo(() => {
     const amt = parseFloat(pledgeAmount || '');
@@ -122,6 +141,69 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
     if (isTesting && demoMaxBtc > 0) return amt > demoMaxBtc;
     return amt > confirmedBtc;
   }, [pledgeAmount, confirmedBtc, isWalletConnected, isTesting, demoMaxBtc]);
+
+  // Reserve used when user selects 100%
+  const reserveSatsBtc = 0.0001; // 10,000 sats
+
+  // Compute dynamic slider bounds in percent based on limits and balance
+  const { minPercent, maxPercent } = useMemo(() => {
+    const base = effectiveBalanceBtc;
+    if (!Number.isFinite(base) || base <= 0) return { minPercent: 0, maxPercent: 0 };
+    const minPct = Number.isFinite(minPledge) && (minPledge as number) > 0 ? Math.min(100, Math.max(0, ((minPledge as number) / base) * 100)) : 0;
+    // Spendable cap respects maxPledge and balance; when mapping to 100% preset, we leave reserve, but general max is bounded by maxPledge and base
+    const spendCap = Number.isFinite(maxPledge) && (maxPledge as number) > 0 ? Math.min(base, maxPledge as number) : base;
+    const maxPct = Math.min(100, Math.max(0, (spendCap / base) * 100));
+    return { minPercent: minPct, maxPercent: maxPct };
+  }, [effectiveBalanceBtc, minPledge, maxPledge]);
+
+  // Derive slider percent from input edits
+  useEffect(() => {
+    const amt = parseFloat(pledgeAmount || '');
+    const base = effectiveBalanceBtc;
+    if (!Number.isFinite(amt) || !Number.isFinite(base) || base <= 0) {
+      setSliderPercent(0);
+      return;
+    }
+    // When user enters approx (balance - 10k sats), treat as 100%
+    const maxSpendPreset = Math.max(0, base - reserveSatsBtc);
+    let percent = amt >= maxSpendPreset ? 100 : Math.min(100, Math.max(0, (amt / base) * 100));
+    // Clamp to dynamic bounds
+    percent = Math.min(maxPercent, Math.max(minPercent, percent));
+    setSliderPercent(percent);
+  }, [pledgeAmount, effectiveBalanceBtc, minPercent, maxPercent]);
+
+  // Helper to format BTC amount to up to 8 decimals without trailing zeros
+  const formatBtc = (n: number) => {
+    if (!Number.isFinite(n)) return '';
+    const fixed = n.toFixed(8);
+    return fixed.replace(/\.0+$/, '').replace(/(\.\d*?[1-9])0+$/, '$1');
+  };
+
+  // Compute amount from percent, respecting min/max and 10k sats reserve at 100%
+  const computeAmountFromPercent = (p: number) => {
+    const base = effectiveBalanceBtc;
+    if (!Number.isFinite(base) || base <= 0) return '';
+    // Clamp to dynamic bounds
+    const clampedP = Math.min(maxPercent, Math.max(minPercent, p));
+    const percentBase = clampedP >= 100 ? Math.max(0, base - reserveSatsBtc) : base;
+    let amt = (percentBase * clampedP) / 100;
+    // Enforce bounds when non-zero
+    if (amt > 0) {
+      if (Number.isFinite(maxPledge) && maxPledge > 0) amt = Math.min(amt, maxPledge);
+      if (Number.isFinite(minPledge) && minPledge > 0) amt = Math.max(amt, minPledge);
+    }
+    // Ensure we never exceed spendable in any case
+    const spendCap = clampedP >= 100 ? Math.max(0, base - reserveSatsBtc) : base;
+    amt = Math.min(amt, spendCap);
+    // Snap to exact max when within epsilon to avoid floating drift
+    if (Number.isFinite(maxPledge) && maxPledge > 0) {
+      const eps = 1e-8;
+      if (Math.abs(amt - (maxPledge as number)) <= eps || amt > (maxPledge as number) - eps) {
+        amt = Math.min(spendCap, maxPledge as number);
+      }
+    }
+    return amt <= 0 ? '' : formatBtc(amt);
+  };
 
   const handlePledge = async () => {
     setMessage(null);
@@ -282,6 +364,66 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
         </div>
       )}
 
+      {/* Percentage Slider (25/50/75/100 with 10,000 sats reserve at 100%) */}
+      {isWalletConnected && effectiveBalanceBtc > (Number.isFinite(minPledge) ? (minPledge as number) : 0) && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-gray-400 text-sm">Use balance</label>
+            <span className="text-xs text-gray-500">{sliderPercent.toFixed(1)}%</span>
+          </div>
+          <input
+            type="range"
+            min={minPercent}
+            max={maxPercent}
+            step={0.1}
+            value={sliderPercent}
+            onChange={(e) => {
+              const raw = Number(e.target.value);
+              const p = Math.min(maxPercent, Math.max(minPercent, raw));
+              setSliderPercent(p);
+              const computed = computeAmountFromPercent(p);
+              setPledgeAmount(computed);
+            }}
+            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-adderrels-500"
+          />
+          <div className="flex items-center justify-between text-xs text-gray-400 mt-2">
+            {([0, 25, 50, 75, 100] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => {
+                  const target = Math.min(maxPercent, Math.max(minPercent, p));
+                  setSliderPercent(target);
+                  const computed = computeAmountFromPercent(target);
+                  setPledgeAmount(computed);
+                }}
+                disabled={p < Math.ceil(minPercent) || p > Math.floor(maxPercent)}
+                className={`px-2 py-1 rounded-md border ${Math.round(sliderPercent) === p ? 'border-adderrels-500 text-adderrels-400' : 'border-gray-700 hover:border-gray-600'} ${p < Math.ceil(minPercent) || p > Math.floor(maxPercent) ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                {p === 100 ? '100% (-10k sats)' : `${p}%`}
+              </button>
+            ))}
+            <div className="ml-2">
+              {(Number.isFinite(maxPercent) && maxPercent > 0 && maxPercent < 100) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const mp = Math.min(100, Math.max(0, maxPercent));
+                    setSliderPercent(mp);
+                    const amt = Number.isFinite(maxPledge) && (maxPledge as number) > 0 ? (maxPledge as number) : computeAmountFromPercent(mp) as unknown as number;
+                    setPledgeAmount(formatBtc(typeof amt === 'number' ? amt : parseFloat(computeAmountFromPercent(mp))));
+                  }}
+                  className="px-2 py-1 rounded-md border border-adderrels-500 text-adderrels-400 hover:bg-adderrels-500/10"
+                  title="Set to maximum allowed"
+                >
+                  Max
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Input */}
       <div className="mb-6">
         <label className="block text-gray-400 text-sm mb-2">BTC Amount</label>
@@ -305,6 +447,9 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
             {isTesting ? 'Amount exceeds your testing demo balance.' : 'Amount exceeds your confirmed wallet balance.'}
           </p>
         )}
+        {pledgeUsd !== null && (
+          <p className="mt-2 text-sm text-gray-400">≈ ${typeof pledgeUsd === 'number' ? pledgeUsd.toLocaleString(undefined, { maximumFractionDigits: 2 }) : ''} USD</p>
+        )}
       </div>
 
       {/* Message */}
@@ -315,7 +460,7 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
         </div>
       )}
 
-      {/* Estimation note: depends on server price; hidden when zero */}
+      {/* Estimation note: based on current DB pledges (verified + unverified); subject to change. Hidden when zero */}
       {pledgeAmount && estimatedTokens > 0 && (
         <div className="bg-gradient-to-r from-adderrels-500/10 to-adderrels-600/10 border border-adderrels-500/30 p-4 rounded-xl mb-6">
           <p className="text-gray-400 text-sm mb-1">Estimated ADDERRELS Tokens</p>
@@ -324,6 +469,9 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
               ~{estimatedTokens.toLocaleString()} ADDERRELS
             </p>
           </div>
+          <p className="text-xs text-gray-400 mt-2">
+            Estimate based on current pledges and live BTC price; subject to change as new pledges arrive.
+          </p>
         </div>
       )}
 

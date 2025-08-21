@@ -82,6 +82,8 @@ A new background task now verifies pledge txids against mempool.space and marks 
 - **Pledge UI: Wallet Balance Display**
   - `frontend/src/components/PledgeInterface.tsx` now shows connected wallet balance in BTC and approx USD using `useWalletBalance()` from `bitcoin-wallet-adapter`.
   - Added null checks, manual refresh, and disables pledging when input exceeds confirmed balance.
+  - Added a percentage slider with checkpoints at 25%, 50%, 75%, and 100% (100% leaves a 5,000 sats reserve for fees). The slider syncs with the BTC input and respects min/max pledge limits and available balance (testing uses demo balance).
+  - BTC Amount field now also shows the USD equivalent of the entered BTC using the live BTC price (hidden when price unavailable).
 - **Removed Demo/Mock Code (Frontend)**
   - Eliminated mock verification flow from `frontend/src/components/PledgeForm.tsx`.
   - Users now paste a real on-chain txid to verify pledges; no placeholders.
