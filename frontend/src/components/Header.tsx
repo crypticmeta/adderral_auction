@@ -212,7 +212,7 @@ export default function Header() {
                 icon="/adderrel.png"
                 network={env.btcNetwork}
                 connectionMessage="Connect your wallet to participate in the auction."
-                buttonClassname="bg-adderrels-500 text-white hover:bg-adderrels-500/90 transition-colors rounded-md px-3 py-2 text-sm font-medium"
+              // buttonClassname="bg-adderrels-500 text-white hover:bg-adderrels-500/90 transition-colors rounded-md px-3 py-2 text-sm font-medium"
               // supportedWallets={["Unisat", "Xverse", "Leather", "Okx", "Magiceden"]}
               // balance={hasConnectedBalance ? (confirmedBtc as number) : undefined}
               />

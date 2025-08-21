@@ -4,6 +4,8 @@
 // Styling: TailwindCSS with project theme cards and typography.
 
 import React from 'react';
+import DevCutBanner from '@/components/DevCutBanner';
+import { env } from '@/config/env';
 
 interface PledgeStatsResponse {
   scope: { type: 'active_auction' | 'all'; auctionId?: string };
@@ -41,6 +43,7 @@ export default async function StatsPage() {
   const stats = await getStats();
   const totals = stats?.totals ?? { last24h: 0, last48h: 0, last72h: 0 };
   const generatedAt = stats?.generatedAt ?? null;
+  const isDev = env.appEnv === 'development' || env.testing;
 
   return (
     <main className="container mx-auto px-4 py-10">
@@ -59,6 +62,10 @@ export default async function StatsPage() {
         <StatCard label="24–48h" valueBTC={totals.last48h ?? 0} />
         <StatCard label="48–72h" valueBTC={totals.last72h ?? 0} />
       </section>
+
+      {isDev && (
+        <DevCutBanner last24hBTC={totals.last24h ?? 0} generatedAt={generatedAt} />
+      )}
 
       {!stats && (
         <div className="mt-6 text-sm text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
