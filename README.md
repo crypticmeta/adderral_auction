@@ -595,6 +595,27 @@ Key UI test:
   - Verifies pledge lifecycle across `PledgeQueue`, `RecentActivity`, and `AuctionStatus` reacting to mocked fetches and WebSocket events.
   - Notes: advances fake timers (300ms debounce), scopes assertions with `within()` to the queue, and uses a mock socket exposed on `globalThis`.
 
+#### Additional UI tests (coverage expansion)
+- `frontend/src/__tests__/pledgeQueue.states.test.tsx`
+  - Loading/empty/error states, fetch error messaging, basic guard when `auctionId` is missing.
+- `frontend/src/__tests__/recentActivity.rules.test.tsx`
+  - Limits to 10 newest items, sort order, refunded/confirmed badges with scoped queries.
+- `frontend/src/__tests__/auctionStatus.updates.test.tsx`
+  - Connection/loading banners, active/ended banners, progress bar values and formatted totals.
+- `frontend/src/__tests__/pledgeInterface.validation.test.tsx`
+  - Wallet gating, min/max amount validation, balance checks, and estimated tokens visibility rules.
+- `frontend/src/__tests__/environmentGuard.banner.test.tsx`
+  - Backend fetch error overlay and environment mismatch overlay (scoped assertions within the banner).
+- `frontend/src/__tests__/pledgeQueue.websocket.reconnect.test.tsx`
+  - Simulates WebSocket-driven queue update/reconnect and asserts refetch.
+- `frontend/src/__tests__/recentActivity.transitions.test.tsx`
+  - Mixed refunded/confirmed items and transition from confirmed → refunded.
+
+Notes:
+- Tests rely on `NEXT_PUBLIC_API_URL` defaulting to `http://localhost:5000` and may log a warning; harmless.
+- Wallet and WebSocket hooks are mocked; tests are deterministic and isolated.
+ - Jest setup suppresses only the expected env warning from `PledgeQueue.tsx`; see `frontend/jest.setup.ts`.
+
 Env notes:
 - Tests do not require `NEXT_PUBLIC_API_URL`, but warnings may appear; harmless.
 - Wallet adapters are mocked; no browser wallet needed.

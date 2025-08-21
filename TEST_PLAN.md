@@ -6,6 +6,23 @@ Existing:
   - Verifies pledge lifecycle across `PledgeQueue`, `RecentActivity`, and `AuctionStatus` using mocked fetch and WebSocket.
   - Uses fake timers to advance the 300ms debounce in `PledgeQueue` and `within()` to scope assertions.
 
+- [x] `frontend/src/__tests__/pledgeQueue.states.test.tsx`
+  - Loading/empty/error states; fetch error/user messaging; missing auctionId guard.
+- [x] `frontend/src/__tests__/recentActivity.rules.test.tsx`
+  - Max 10 items, sorted by timestamp desc; exact badge rendering for refunded/confirmed.
+- [x] `frontend/src/__tests__/pledgeInterface.validation.test.tsx`
+  - Wallet connection gating; min/max validation; balance gating; estimated tokens display rules.
+- [x] `frontend/src/__tests__/environmentGuard.banner.test.tsx`
+  - Backend status fetch error overlay; environment mismatch banner; scoped queries.
+- [x] `frontend/src/__tests__/auctionStatus.updates.test.tsx`
+  - Connection/loading banners; active/ended banners; progress bar and formatted totals.
+
+Newly added edge-case tests:
+- [x] `frontend/src/__tests__/pledgeQueue.websocket.reconnect.test.tsx`
+  - Simulates WS-driven queue updates (reconnect/change) and asserts refetch behavior.
+- [x] `frontend/src/__tests__/recentActivity.transitions.test.tsx`
+  - Mixed refunded/confirmed items and transition from confirmed → refunded with rerender.
+
 How to run:
 ```bash
 cd frontend
@@ -13,11 +30,9 @@ yarn test
 ```
 
 Planned next tests (frontend):
-- PledgeQueue error/empty/loading states (API 500/timeout → user-friendly note; empty queue message).
-- RecentActivity rendering rules (max 10 items, sort by time, correct badges: In Queue/Processed/Confirmed).
-- AuctionStatus totals update on `auction_status` WS events and prop changes (null-safe rendering).
-- PledgeInterface validation (null checks, disable when `priceError=true`, balance gating, USD/BTC formatting).
-- Env guard banner behavior when frontend vs backend flags mismatch.
+- WebSocket reconnection jitter/backoff paths (if implemented) and idempotent refetch.
+- RecentActivity avatar seed consistency and truncation/formatting of long addresses.
+- Accessibility assertions: role-based queries for banners and lists, focus management on error overlays.
 
 
 # Test Plan v1.0 (Automation-first)
@@ -107,6 +122,9 @@ Frontend:
 cd frontend
 yarn test
 ```
+
+Setup notes:
+- Jest setup suppresses the expected env warning from `PledgeQueue.tsx` about `NEXT_PUBLIC_API_URL` defaulting; other warnings are forwarded. See `frontend/jest.setup.ts`.
 
 ## 8) CI Criteria
 

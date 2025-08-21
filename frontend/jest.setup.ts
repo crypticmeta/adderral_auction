@@ -21,3 +21,11 @@ jest.spyOn(console, 'error').mockImplementation(((...args: any[]) => {
   // forward minimal
   // (noop to reduce noise)
 }) as any);
+
+// Suppress expected env warning from PledgeQueue when NEXT_PUBLIC_API_URL is not set in tests
+const originalWarn = console.warn;
+jest.spyOn(console, 'warn').mockImplementation(((...args: any[]) => {
+  const msg = (args && args[0]) ? String(args[0]) : '';
+  if (msg.includes('NEXT_PUBLIC_API_URL not set. Using default http://localhost:5000')) return;
+  originalWarn.apply(console, args as any);
+}) as any);
