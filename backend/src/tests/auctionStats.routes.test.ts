@@ -6,6 +6,7 @@ import pledgeRoutes from '../routes/pledgeRoutes';
 import { redisClient } from '../config/redis';
 import { bitcoinPriceService } from '../services/bitcoinPriceService';
 import prisma from '../config/prisma';
+import { createActiveAuction } from './utils/testFactories';
 
 let AUCTION_ID: string = '';
 
@@ -38,23 +39,7 @@ describe('GET /api/auction/:id/stats', () => {
 
   beforeEach(async () => {
     // Create a dedicated auction for this test
-    const now = new Date();
-    const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const created = await prisma.auction.create({
-      data: {
-        totalTokens: 50000,
-        ceilingMarketCap: 250000,
-        totalBTCPledged: 0,
-        refundedBTC: 0,
-        startTime: now,
-        endTime: end,
-        isActive: true,
-        isCompleted: false,
-        minPledgeSats: 20000,
-        maxPledgeSats: 400000,
-        network: 'MAINNET',
-      },
-    });
+    const created = await createActiveAuction();
     AUCTION_ID = created.id;
 
     // quick sanity via HTTP to ensure route sees it

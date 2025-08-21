@@ -1,5 +1,6 @@
 // File: backend/src/tests/socketHandler.price.test.ts | Purpose: Verify sendAuctionStatus emits priceError and computed fields correctly (deterministic by mocking BTC price). Uses jest.isolateModules with doMock to ensure the isolated module registry sees the mocked price service.
 import { PrismaClient } from '../generated/prisma';
+import { createActiveAuction } from './utils/testFactories';
 
 type EmittedEvent = { event: string; payload: any };
 const makeSocket = () => {
@@ -34,19 +35,13 @@ describe('sendAuctionStatus', () => {
 
     // Seed DB
     const prisma = new PrismaClient();
-    const auc = await prisma.auction.create({
-      data: {
-        isActive: true,
-        isCompleted: false,
-        endTime: new Date(Date.now() + 60_000),
-        startTime: new Date(Date.now() - 1000),
-        totalBTCPledged: 1.23,
-        refundedBTC: 0,
-        totalTokens: 100_000_000,
-        ceilingMarketCap: 15_000_000,
-        minPledgeSats: 100_000,
-        maxPledgeSats: 50_000_000,
-      }
+    const auc = await createActiveAuction({
+      totalBTCPledged: 1.23,
+      refundedBTC: 0,
+      totalTokens: 100_000_000,
+      ceilingMarketCap: 15_000_000,
+      minPledgeSats: 100_000,
+      maxPledgeSats: 50_000_000,
     });
 
     let sendAuctionStatus: any;
@@ -96,19 +91,13 @@ describe('sendAuctionStatus', () => {
     let getSpy: jest.Mock;
     // Seed DB
     const prisma = new PrismaClient();
-    const auc = await prisma.auction.create({
-      data: {
-        isActive: true,
-        isCompleted: false,
-        endTime: new Date(Date.now() + 60_000),
-        startTime: new Date(Date.now() - 1000),
-        totalBTCPledged: 2,
-        refundedBTC: 0,
-        totalTokens: 50_000,
-        ceilingMarketCap: 15_000_000,
-        minPledgeSats: 100_000,
-        maxPledgeSats: 50_000_000,
-      }
+    const auc = await createActiveAuction({
+      totalBTCPledged: 2,
+      refundedBTC: 0,
+      totalTokens: 50_000,
+      ceilingMarketCap: 15_000_000,
+      minPledgeSats: 100_000,
+      maxPledgeSats: 50_000_000,
     });
 
     let sendAuctionStatus: any;

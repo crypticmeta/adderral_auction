@@ -560,6 +560,13 @@ NEXT_PUBLIC_TESTING=true
   - Therefore, create any required test data inside each suite's `beforeEach`, not in `beforeAll`.
   - Example updated tests: `backend/src/tests/maxPledge.routes.test.ts`, `backend/src/tests/auctionStats.routes.test.ts` create auctions in `beforeEach` and sanity-check via `GET /api/auction/:id`.
   - Stub external dependencies (e.g., BTC price) in `beforeAll` and restore in `afterAll` to avoid live network during API tests.
+  - Use the shared test factory `backend/src/tests/utils/testFactories.ts#createActiveAuction()` to seed auctions with sensible defaults; pass overrides as needed per test.
+
+#### Redis caching gotchas (tests)
+
+- Controllers and services cache under keys like `btc:price:*` and `auction:*`.
+- Global Jest setup already flushes Redis between tests; if a test asserts TTL or cache-warm behavior, explicitly clear the relevant keys in that test's `beforeEach` (see `bitcoinPriceService.test.ts`, `scheduledTasks.test.ts`).
+- When mocking BTC price with `jest.isolateModules`, ensure the mock is applied before importing `websocket/socketHandler` so the isolated module registry sees the stubbed price service (see `socketHandler.*.test.ts`).
 
 ### Scheduler interval safety
 

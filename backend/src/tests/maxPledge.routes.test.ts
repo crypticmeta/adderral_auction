@@ -7,6 +7,7 @@ import { redisClient } from '../config/redis';
 import { BitcoinPriceService } from '../services/bitcoinPriceService';
 import { calculateMaxPledge } from '../controllers/pledgeController';
 import prisma from '../config/prisma';
+import { createActiveAuction } from './utils/testFactories';
 
 // Auction id obtained dynamically from reseed response
 let AUCTION_ID: string = '';
@@ -42,22 +43,11 @@ describe('GET /api/pledges/max-pledge/:auctionId', () => {
 
   // Create a fresh dedicated auction after global cleanup for each test
   beforeEach(async () => {
-    const now = new Date();
-    const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const created = await prisma.auction.create({
-      data: {
-        totalTokens: 10000,
-        ceilingMarketCap: 100000,
-        totalBTCPledged: 0,
-        refundedBTC: 0,
-        startTime: now,
-        endTime: end,
-        isActive: true,
-        isCompleted: false,
-        minPledgeSats: 10000,
-        maxPledgeSats: 200000,
-        network: 'MAINNET',
-      },
+    const created = await createActiveAuction({
+      totalTokens: 10000,
+      ceilingMarketCap: 100000,
+      minPledgeSats: 10000,
+      maxPledgeSats: 200000,
     });
     AUCTION_ID = created.id;
 

@@ -1,5 +1,6 @@
 // File: backend/src/tests/socketHandler.payload.test.ts | Purpose: Validate auction_status payload completeness across scenarios (active/price ok, price error, ceiling reached) and pledges include user addresses
 import { PrismaClient } from '../generated/prisma';
+import { createActiveAuction } from './utils/testFactories';
 
 // Simple socket test double that records emissions
 type EmittedEvent = { event: string; payload: any };
@@ -42,29 +43,22 @@ describe('sendAuctionStatus payload completeness', () => {
       }
     });
 
-    const auc = await prisma.auction.create({
-      data: {
-        isActive: true,
-        isCompleted: false,
-        endTime: new Date(Date.now() + 60_000),
-        startTime: new Date(Date.now() - 1000),
-        totalBTCPledged: 0.5,
-        refundedBTC: 0,
-        totalTokens: 1_000_000,
-        ceilingMarketCap: 50_000_000,
-        minPledgeSats: 100_000,
-        maxPledgeSats: 50_000_000,
-        pledges: {
-          create: {
-            userId: user.id,
-            satAmount: 5_000_000, // 0.05 BTC
-            depositAddress: 'bc1q-deposit',
-            timestamp: new Date(),
-            verified: true,
-          }
+    const auc = await createActiveAuction({
+      totalBTCPledged: 0.5,
+      refundedBTC: 0,
+      totalTokens: 1_000_000,
+      ceilingMarketCap: 50_000_000,
+      minPledgeSats: 100_000,
+      maxPledgeSats: 50_000_000,
+      pledges: {
+        create: {
+          userId: user.id,
+          satAmount: 5_000_000, // 0.05 BTC
+          depositAddress: 'bc1q-deposit',
+          timestamp: new Date(),
+          verified: true,
         }
-      },
-      include: { pledges: true }
+      }
     });
 
     // Mock BTC price positive
@@ -129,19 +123,13 @@ describe('sendAuctionStatus payload completeness', () => {
 
   test('marks priceError and zeros price-dependent fields when price unavailable', async () => {
     const prisma = new PrismaClient();
-    await prisma.auction.create({
-      data: {
-        isActive: true,
-        isCompleted: false,
-        endTime: new Date(Date.now() + 30_000),
-        startTime: new Date(Date.now() - 1000),
-        totalBTCPledged: 0.1,
-        refundedBTC: 0,
-        totalTokens: 10_000,
-        ceilingMarketCap: 2_000_000,
-        minPledgeSats: 100_000,
-        maxPledgeSats: 50_000_000,
-      }
+    await createActiveAuction({
+      totalBTCPledged: 0.1,
+      refundedBTC: 0,
+      totalTokens: 10_000,
+      ceilingMarketCap: 2_000_000,
+      minPledgeSats: 100_000,
+      maxPledgeSats: 50_000_000,
     });
 
     let getSpy: jest.Mock;
@@ -176,19 +164,13 @@ describe('sendAuctionStatus payload completeness', () => {
 
   test('sets ceilingReached=true when pledged*price >= ceilingMarketCap', async () => {
     const prisma = new PrismaClient();
-    const auc = await prisma.auction.create({
-      data: {
-        isActive: true,
-        isCompleted: false,
-        endTime: new Date(Date.now() + 45_000),
-        startTime: new Date(Date.now() - 1000),
-        totalBTCPledged: 1,
-        refundedBTC: 0,
-        totalTokens: 1_000,
-        ceilingMarketCap: 75_000, // choose a price to exceed this
-        minPledgeSats: 100_000,
-        maxPledgeSats: 50_000_000,
-      }
+    const auc = await createActiveAuction({
+      totalBTCPledged: 1,
+      refundedBTC: 0,
+      totalTokens: 1_000,
+      ceilingMarketCap: 75_000, // choose a price to exceed this
+      minPledgeSats: 100_000,
+      maxPledgeSats: 50_000_000,
     });
 
     const mockedPrice = 80_000; // 1 BTC * 80k = 80k >= 75k

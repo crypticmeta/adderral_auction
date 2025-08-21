@@ -5,6 +5,7 @@ import pledgeRoutes from '../routes/pledgeRoutes';
 import { setSocketServer } from '../controllers/pledgeController';
 import { PrismaClient } from '../generated/prisma';
 import { redisClient } from '../config/redis';
+import { createActiveAuction } from './utils/testFactories';
 
 // Lightweight Socket.IO test double to capture emissions
 // Ensures we don't need a real Socket.IO server for controller broadcast
@@ -44,23 +45,6 @@ const getQueuedPledges = async () => {
 };
 
 // Seed helpers
-const seedActiveAuction = async () => {
-  const now = Date.now();
-  return prisma.auction.create({
-    data: {
-      isActive: true,
-      isCompleted: false,
-      startTime: new Date(now - 1000),
-      endTime: new Date(now + 60_000),
-      totalBTCPledged: 0,
-      refundedBTC: 0,
-      totalTokens: 1_000_000,
-      ceilingMarketCap: 50_000_000, // large enough to not trigger refunds
-      minPledgeSats: 100_000,       // 0.001 BTC
-      maxPledgeSats: 100_000_000,   // 1 BTC
-    }
-  });
-};
 
 const seedUser = async (id: string) => {
   return prisma.user.create({
@@ -105,7 +89,14 @@ describe('POST /api/pledges end-to-end', () => {
     const userId = `u_${Date.now()}`;
     const [user, auction] = await Promise.all([
       seedUser(userId),
-      seedActiveAuction()
+      createActiveAuction({
+        totalBTCPledged: 0,
+        refundedBTC: 0,
+        totalTokens: 1_000_000,
+        ceilingMarketCap: 50_000_000,
+        minPledgeSats: 100_000,
+        maxPledgeSats: 100_000_000,
+      })
     ]);
     expect(user?.id).toBe(userId);
     expect(auction?.isActive).toBe(true);
@@ -161,7 +152,14 @@ describe('POST /api/pledges end-to-end', () => {
   test('allows multiple pledges from same user (no unique constraint)', async () => {
     const userId = `u_${Date.now()}_multi`;
     await seedUser(userId);
-    await seedActiveAuction();
+    await createActiveAuction({
+      totalBTCPledged: 0,
+      refundedBTC: 0,
+      totalTokens: 1_000_000,
+      ceilingMarketCap: 50_000_000,
+      minPledgeSats: 100_000,
+      maxPledgeSats: 100_000_000,
+    });
 
     const { io } = makeIoDouble();
     setSocketServer(io);
@@ -193,7 +191,14 @@ describe('POST /api/pledges end-to-end', () => {
 
   test('rejects 400 when missing required fields (null checks)', async () => {
     await seedUser(`u_${Date.now()}_bad`);
-    await seedActiveAuction();
+    await createActiveAuction({
+      totalBTCPledged: 0,
+      refundedBTC: 0,
+      totalTokens: 1_000_000,
+      ceilingMarketCap: 50_000_000,
+      minPledgeSats: 100_000,
+      maxPledgeSats: 100_000_000,
+    });
 
     const { io } = makeIoDouble();
     setSocketServer(io);
