@@ -291,13 +291,6 @@ export const createPledge = async (req: Request, res: Response) => {
       queuePosition
     });
   } catch (error: any) {
-    // Handle unique constraint violation gracefully
-    if (error && typeof error === 'object' && error.code === 'P2002') {
-      return res.status(409).json({
-        error: 'Duplicate pledge',
-        details: 'A pledge for this user and auction already exists.'
-      });
-    }
     console.error('Error creating pledge:', error);
     return res.status(500).json({
       error: 'Failed to create pledge',
@@ -306,10 +299,6 @@ export const createPledge = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * Verify a pledge with a transaction ID
- */
- 
 
 /**
  * Get all pledges for an auction

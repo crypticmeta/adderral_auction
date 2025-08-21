@@ -56,8 +56,6 @@ model Pledge {
   auctionId      String
   auction        Auction  @relation(fields: [auctionId], references: [id])
   network        BtcNetwork @default(MAINNET)
-
-  @@unique([auctionId, userId])
 }
 
 model Auction {

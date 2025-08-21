@@ -168,6 +168,8 @@ export function RecentActivity({ activities = [], isConnected = false }: RecentA
         return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-800">Confirmed</span>;
     };
 
+    console.log({ activities })
+
     return (
         <div className="glass-card p-8 rounded-3xl">
             <div className="flex items-center justify-between mb-6">

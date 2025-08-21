@@ -103,6 +103,14 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Reacts in real time to `auction_status` WebSocket updates
   - Files: `frontend/src/components/auction-progress.tsx`, `frontend/src/app/globals.css`
   - Accessible with `role="progressbar"` and ARIA values
+- **Backend: Multiple pledges per user**
+  - Removed unique constraint on `Pledge` (`@@unique([auctionId, userId])`) to allow multiple pledges from the same user (identified by cardinal address) within a single auction.
+  - Run migrations from `backend/`:
+    ```bash
+    yarn prisma:generate
+    yarn prisma:migrate
+    ```
+  - Controllers currently do not block duplicates; no code changes required.
 - **UI change: Removed Raised-So-Far card**
   - The highlighted stat card showing total BTC raised was removed from `AuctionStats` (auction progress is visible elsewhere).
   - Prop `totalRaisedBTC` has been dropped from `AuctionStats` and its usage removed in `page.tsx`.
