@@ -25,3 +25,19 @@ services:
       interval: 2s
       timeout: 3s
       retries: 20
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: acorn_test_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@local.test
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/misc/ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20

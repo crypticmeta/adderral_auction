@@ -514,6 +514,9 @@ NEXT_PUBLIC_TESTING=true
   ```bash
   yarn services:up
   ```
+- pgAdmin is available at http://localhost:5050 (email: `admin@local.test`, password: `admin`).
+  - Add a server: Host `acorn_test_postgres` or `localhost`, Port `5432`, User `test`, Password `test`, DB `testdb`.
+  - Useful for inspecting schemas and running queries during tests.
 - Set env for Jest (e.g., in your shell or `.env.test.local` loaded by your environment):
   ```bash
   # Postgres (matches docker-compose.test.yml)
@@ -534,6 +537,14 @@ NEXT_PUBLIC_TESTING=true
     ```bash
     yarn services:down
     ```
+
+#### Helpful CLIs
+
+- From `backend/` you can open containerized CLIs:
+  ```bash
+  yarn db:psql     # psql into Postgres (db=testdb, user=test)
+  yarn redis:cli   # open redis-cli against local Redis
+  ```
 
 ### Testcontainers details (backend)
 

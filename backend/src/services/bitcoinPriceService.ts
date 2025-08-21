@@ -5,6 +5,7 @@
 
 import axios from 'axios';
 import { redisClient } from '../config/redis';
+import { logger } from '../utils/logger';
 
 export class BitcoinPriceService {
   private static instance: BitcoinPriceService;
@@ -99,12 +100,12 @@ export class BitcoinPriceService {
         const price = source.parser(response.data);
 
         if (price && !isNaN(price) && price > 0) {
-          console.log(`Got BTC price from ${source.name}: $${price}`);
+          logger.info(`Got BTC price from ${source.name}: $${price}`);
           prices.push(price);
           return price;
         }
       } catch (error) {
-        console.error(`Error fetching from ${source.name}:`, error);
+        logger.error(`Error fetching from ${source.name}:`, error);
         return null as any;
       }
     });
@@ -113,7 +114,7 @@ export class BitcoinPriceService {
     await Promise.all(pricePromises);
 
     if (prices.length === 0) {
-      console.warn('No valid prices received from any source');
+      logger.warn('No valid prices received from any source');
       return 0; // Signal failure to caller
     }
 

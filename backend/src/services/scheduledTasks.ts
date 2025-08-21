@@ -8,6 +8,7 @@ import { bitcoinPriceService } from './bitcoinPriceService';
 import { broadcastAuctionUpdate } from '../controllers/auctionController';
 import { redisClient } from '../config/redis';
 import { txConfirmationService } from './txConfirmationService';
+import { logger } from '../utils/logger';
 import type { Server } from 'socket.io';
 
 // Prisma client provided by singleton
@@ -17,7 +18,7 @@ let txCheckInterval: NodeJS.Timeout | null = null;
 
 // Check for expired auctions every minute
 export const startAuctionTimeCheck = () => {
-  console.log('Starting scheduled auction time check service');
+  logger.info('Starting scheduled auction time check service');
   
   // Run immediately on startup
   checkExpiredAuctions();
@@ -28,7 +29,7 @@ export const startAuctionTimeCheck = () => {
 
 // Refresh Bitcoin price every 15 minutes
 export const startBitcoinPriceRefresh = () => {
-  console.log('Starting scheduled Bitcoin price refresh service');
+  logger.info('Starting scheduled Bitcoin price refresh service');
   
   // Run immediately on startup (but skip if cache is warm enough)
   maybeRefreshBitcoinPrice();
@@ -55,10 +56,10 @@ export const stopBitcoinPriceRefresh = () => {
 
 // Periodically check unverified pledges' tx confirmations
 export const startTxConfirmationChecks = (io: Server) => {
-  console.log('Starting scheduled Tx confirmation check service');
+  logger.info('Starting scheduled Tx confirmation check service');
   // Run immediately on startup
   txConfirmationService.checkUnverifiedPledges(io).catch((e) =>
-    console.error('Initial tx confirmation run error:', e)
+    logger.error('Initial tx confirmation run error:', e)
   );
   // Then schedule every 30 seconds
   if (txCheckInterval) {
@@ -67,7 +68,7 @@ export const startTxConfirmationChecks = (io: Server) => {
   }
   txCheckInterval = setInterval(() => {
     txConfirmationService.checkUnverifiedPledges(io).catch((e) =>
-      console.error('Periodic tx confirmation run error:', e)
+      logger.error('Periodic tx confirmation run error:', e)
     );
   }, 30 * 1000);
   if (txCheckInterval && typeof (txCheckInterval as any).unref === 'function') {
@@ -99,7 +100,7 @@ const checkExpiredAuctions = async () => {
     });
     
     if (expiredAuctions.length > 0) {
-      console.log(`Found ${expiredAuctions.length} expired auctions to complete`);
+      logger.info(`Found ${expiredAuctions.length} expired auctions to complete`);
       
       // Complete each expired auction
       for (const auction of expiredAuctions) {
@@ -111,14 +112,14 @@ const checkExpiredAuctions = async () => {
           }
         });
         
-        console.log(`Auction ${auction.id} completed due to reaching 72-hour time limit`);
+        logger.info(`Auction ${auction.id} completed due to reaching 72-hour time limit`);
         
         // Broadcast the update to connected clients
         await broadcastAuctionUpdate(auction.id);
       }
     }
   } catch (error) {
-    console.error('Error checking expired auctions:', error);
+    logger.error('Error checking expired auctions:', error);
   }
 };
 
@@ -139,13 +140,13 @@ const maybeRefreshBitcoinPrice = async () => {
     // Cache warm enough; optionally log current cached value
     const cached = await redisClient.get(CACHE_KEY);
     if (cached != null) {
-      console.log(`Bitcoin price cache warm (ttl ${ttl}s): $${cached}`);
+      logger.info(`Bitcoin price cache warm (ttl ${ttl}s): $${cached}`);
     } else {
       // Safety: if cache disappeared between ttl and get
       await refreshBitcoinPrice();
     }
   } catch (error) {
-    console.error('Error checking Bitcoin price cache TTL:', error);
+    logger.error('Error checking Bitcoin price cache TTL:', error);
     // Fallback: attempt a refresh
     await refreshBitcoinPrice();
   }
@@ -155,8 +156,8 @@ const maybeRefreshBitcoinPrice = async () => {
 const refreshBitcoinPrice = async () => {
   try {
     const price = await bitcoinPriceService.refreshBitcoinPrice();
-    console.log(`Bitcoin price refreshed: $${price}`);
+    logger.info(`Bitcoin price refreshed: $${price}`);
   } catch (error) {
-    console.error('Error refreshing Bitcoin price:', error);
+    logger.error('Error refreshing Bitcoin price:', error);
   }
 };
