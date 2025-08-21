@@ -499,10 +499,12 @@ NEXT_PUBLIC_TESTING=true
 ## Testing
 
 - Backend tests live under `backend/src/tests/`:
-  - `bitcoinPriceService.test.ts`: uses live HTTP; validates median calc, short/long Redis caches, and failure handling.
+  - `bitcoinPriceService.test.ts`: live HTTP; validates median calc, short/long Redis caches, and failure handling.
   - `scheduledTasks.test.ts`: starts the real scheduler and waits for Redis to populate; stops interval after each test.
-  - `socketHandler.price.test.ts`: uses live price service; asserts `priceError` semantics and computed fields.
-- Tests run against real Postgres and Redis using Testcontainers and require internet for live price APIs.
+  - `socketHandler.price.test.ts`: isolates and mocks BTC price; asserts `priceError` semantics and computed fields.
+  - `socketHandler.payload.test.ts`: validates completeness of `auction_status` payload and pledge user addresses across scenarios (price ok/error, ceiling reached).
+  - `statusRoutes.test.ts`: validates `GET /api/status` returns `{ network, testing, nodeEnv, btcUsd }` with `btcUsd` as number|null.
+- Tests default to Testcontainers (ephemeral Postgres/Redis). Optional local mode is below.
 - Ensure Docker is running; then from `backend/` run `yarn test`.
 
 ### Hybrid local services for backend tests (optional)
