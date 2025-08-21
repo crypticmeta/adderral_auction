@@ -57,8 +57,10 @@ describe('AuctionStatus - updates and null safety', () => {
     expect(screen.getByText(/Total BTC Pledged/i)).toBeInTheDocument();
     expect(screen.getByText(/1\.23456789 BTC/)).toBeInTheDocument();
 
-    // Time remaining formatted
-    expect(screen.getByText('01:02:03')).toBeInTheDocument();
+    // Time remaining formatted via separate blocks
+    expect(screen.getByTestId('countdown-hours')).toHaveTextContent('01');
+    expect(screen.getByTestId('countdown-minutes')).toHaveTextContent('02');
+    expect(screen.getByTestId('countdown-seconds')).toHaveTextContent('03');
 
     // Current token price
     expect(screen.getByText(/\$0\.12345678/)).toBeInTheDocument();
