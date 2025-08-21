@@ -1,6 +1,6 @@
 // Seed script: dual-mode
 // - test mode (default): totalTokens=10,000; start=now; duration=24h; ceiling=$5,000; min/max pledge = 10,000–200,000 sats; seeds sample users and randomized pledges.
-// - prod mode (SEED_MODE=prod): totalTokens=100,000,000; start=2 Sep UTC (current year); duration=72h; ceiling=$15,000,000; creates only admin (no test users/pledges).
+// - prod mode (SEED_MODE=prod): totalTokens=100,000,000; start=29 Aug 13:00 UTC (current year); duration=72h; ceiling=$15,000,000; creates only admin (no test users/pledges).
 import { PrismaClient } from '../src/generated/prisma';
 import { addHours } from 'date-fns';
 import axios from 'axios';
@@ -71,10 +71,10 @@ async function main() {
   }
 
   // Auction times
-  // prod: fixed start 2 September UTC, 72h duration
+  // prod: fixed start 29 August 13:00 UTC, 72h duration
   // test: start now, 24h duration
   const currentYear = new Date().getUTCFullYear();
-  const prodStart = new Date(Date.UTC(currentYear, 8, 2, 0, 0, 0)); // Sep=8 (0-based)
+  const prodStart = new Date(Date.UTC(currentYear, 7, 29, 13, 0, 0)); // Aug=7 (0-based), 13:00 UTC
   const startTime = isProd ? prodStart : new Date();
   const endTime = addHours(startTime, isProd ? 72 : 24);
 

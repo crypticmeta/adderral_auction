@@ -1,3 +1,10 @@
+// File: backend/src/routes/api/auction/reset.ts
+// Purpose: Dev-only admin endpoints to reset or reseed the database.
+// - POST /api/auction/reset: clears pledges for the active auction and restarts a fresh window (72h from now).
+// - POST /api/auction/reseed[?mode=test|prod]: full DB wipe + reseed.
+//   - mode=test (default): seeds admin, sample users, a 24h demo auction, and sample pledges.
+//   - mode=prod: seeds admin and a production-style auction only (no sample users/pledges),
+//                starting at 29 Aug 13:00 UTC (current year) with 72h duration.
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../../../config/prisma';
 import { addHours } from 'date-fns';
@@ -35,12 +42,25 @@ export const verifyAdminAccess = async (req: Request, res: Response, next: NextF
  * - Truncates Pledge, Auction, User
  * - Seeds admin, test users, one active auction, and sample pledges
  */
-export const reseedDb = async (_req: Request, res: Response) => {
+export const reseedDb = async (req: Request, res: Response) => {
   try {
-    // Test-mode reseed params aligned with seed.ts
-    const minPledgeSats = 10_000;
-    const maxPledgeSats = 200_000;
-    const ceilingUsd = 5_000;
+    // Optional mode: 'test' (default) or 'prod'
+    const mode = String((req.query?.mode ?? 'test')).toLowerCase();
+    const isProd = mode === 'prod';
+
+    // Params aligned with prisma/seed.ts
+    let minPledgeSats = 100_000; // prod defaults
+    let maxPledgeSats = 50_000_000;
+    let ceilingUsd = 15_000_000; // prod ceiling
+    let totalTokens = 100_000_000;
+
+    if (!isProd) {
+      // Test/dev overrides
+      minPledgeSats = 10_000;
+      maxPledgeSats = 200_000;
+      ceilingUsd = 5_000;
+      totalTokens = 10_000;
+    }
     // Truncate all core tables
     await prisma.$executeRawUnsafe('TRUNCATE TABLE "Pledge" CASCADE');
     await prisma.$executeRawUnsafe('TRUNCATE TABLE "Auction" CASCADE');
@@ -56,7 +76,7 @@ export const reseedDb = async (_req: Request, res: Response) => {
       },
     });
 
-    // Test users
+    // Test users (only created in test/dev mode)
     const testUsers = [
       {
         id: 'user-1',
@@ -78,31 +98,37 @@ export const reseedDb = async (_req: Request, res: Response) => {
       },
     ];
 
-    await Promise.all(
-      testUsers.map((u) =>
-        prisma.user.create({
-          data: {
-            id: u.id,
-            ordinal_address: u.ordinal_address,
-            cardinal_address: u.cardinal_address,
-            connected: true,
-            network: 'testnet',
-          },
-        })
-      )
-    );
+    if (!isProd) {
+      await Promise.all(
+        testUsers.map((u) =>
+          prisma.user.create({
+            data: {
+              id: u.id,
+              ordinal_address: u.ordinal_address,
+              cardinal_address: u.cardinal_address,
+              connected: true,
+              network: 'testnet',
+            },
+          })
+        )
+      );
+    }
 
-    // Create new auction 24h
-    const now = new Date();
-    const endTime = addHours(now, 24);
+    // Create new auction window
+    let startTime = new Date();
+    if (isProd) {
+      const currentYear = new Date().getUTCFullYear();
+      startTime = new Date(Date.UTC(currentYear, 7, 29, 13, 0, 0)); // Aug=7 (0-based), 13:00 UTC
+    }
+    const endTime = addHours(startTime, isProd ? 72 : 24);
     const auction = await prisma.auction.create({
       data: {
         id: '3551190a-c374-4089-a4b0-35912e65ebdd',
-        totalTokens: 10_000,
-        ceilingMarketCap: ceilingUsd, // demo ceiling $5k
+        totalTokens,
+        ceilingMarketCap: ceilingUsd,
         totalBTCPledged: 0,
         refundedBTC: 0,
-        startTime: now,
+        startTime,
         endTime,
         isActive: true,
         isCompleted: false,
@@ -112,46 +138,50 @@ export const reseedDb = async (_req: Request, res: Response) => {
       },
     });
 
-    // Seed 3–6 pledges centered around mid of [min,max]
-    const contributorCount = Math.max(3, Math.min(6, testUsers.length));
-    const chosenUsers = testUsers.slice(0, contributorCount);
-    // Generate random slices then scale to target
-    const randoms = chosenUsers.map(() => Math.random() + 0.25); // 0.25..1.25 range
-    const sumRand = randoms.reduce((a, b) => a + b, 0);
-    const targetSats = Math.round((minPledgeSats + maxPledgeSats) / 2) * contributorCount;
-    let amounts = randoms.map(r => Math.round((r / sumRand) * targetSats));
-    // Clamp within min/max and adjust to approximate targetSats
-    amounts = amounts.map(a => Math.min(Math.max(a, minPledgeSats), maxPledgeSats));
-    // If sum deviates, adjust last entry within bounds
-    let sumNow = amounts.reduce((a, b) => a + b, 0);
-    const delta = targetSats - sumNow;
-    if (delta !== 0) {
-      const lastIdx = amounts.length - 1;
-      const adjusted = Math.min(Math.max(amounts[lastIdx] + delta, minPledgeSats), maxPledgeSats);
-      sumNow += (adjusted - amounts[lastIdx]);
-      amounts[lastIdx] = adjusted;
-    }
+    // Seed pledges only in test/dev mode
+    let totalPledgedBtc = 0;
+    if (!isProd) {
+      // Seed 3–6 pledges centered around mid of [min,max]
+      const contributorCount = Math.max(3, Math.min(6, testUsers.length));
+      const chosenUsers = testUsers.slice(0, contributorCount);
+      // Generate random slices then scale to target
+      const randoms = chosenUsers.map(() => Math.random() + 0.25); // 0.25..1.25 range
+      const sumRand = randoms.reduce((a, b) => a + b, 0);
+      const targetSats = Math.round((minPledgeSats + maxPledgeSats) / 2) * contributorCount;
+      let amounts = randoms.map(r => Math.round((r / sumRand) * targetSats));
+      // Clamp within min/max and adjust to approximate targetSats
+      amounts = amounts.map(a => Math.min(Math.max(a, minPledgeSats), maxPledgeSats));
+      // If sum deviates, adjust last entry within bounds
+      let sumNow = amounts.reduce((a, b) => a + b, 0);
+      const delta = targetSats - sumNow;
+      if (delta !== 0) {
+        const lastIdx = amounts.length - 1;
+        const adjusted = Math.min(Math.max(amounts[lastIdx] + delta, minPledgeSats), maxPledgeSats);
+        sumNow += (adjusted - amounts[lastIdx]);
+        amounts[lastIdx] = adjusted;
+      }
 
-    for (let i = 0; i < chosenUsers.length; i++) {
-      const u = chosenUsers[i];
-      await prisma.pledge.create({
-        data: {
-          userId: u.id,
-          auctionId: auction.id,
-          satAmount: amounts[i],
-          depositAddress: 'generated-deposit-address',
-          status: 'confirmed',
-          verified: true,
-          network: 'MAINNET'
-        },
+      for (let i = 0; i < chosenUsers.length; i++) {
+        const u = chosenUsers[i];
+        await prisma.pledge.create({
+          data: {
+            userId: u.id,
+            auctionId: auction.id,
+            satAmount: amounts[i],
+            depositAddress: 'generated-deposit-address',
+            status: 'confirmed',
+            verified: true,
+            network: 'MAINNET'
+          },
+        });
+      }
+
+      totalPledgedBtc = amounts.reduce((s, a) => s + a, 0) / 1e8;
+      await prisma.auction.update({
+        where: { id: auction.id },
+        data: { totalBTCPledged: totalPledgedBtc },
       });
     }
-
-    const totalPledgedBtc = amounts.reduce((s, a) => s + a, 0) / 1e8;
-    await prisma.auction.update({
-      where: { id: auction.id },
-      data: { totalBTCPledged: totalPledgedBtc },
-    });
 
     return res.status(200).json({
       message: 'Database wiped and reseeded successfully',
@@ -162,6 +192,8 @@ export const reseedDb = async (_req: Request, res: Response) => {
       maxPledgeSats,
       totalPledgedBTC: totalPledgedBtc,
       endTime,
+      startTime,
+      mode: isProd ? 'prod' : 'test',
     });
   } catch (error) {
     console.error('Error reseeding DB:', error);

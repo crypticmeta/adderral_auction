@@ -398,6 +398,7 @@ The Adderrels auction follows a First Come, First Served (FCFS) model with these
 - Default auction duration: 72 hours
 - Dev reseed mode creates a separate 24-hour demo auction targeting ~$1,000 total in USD terms (see below).
 - Minimum/Maximum pledge are stored as sats and may be dynamically set by reseed.
+ - Production seed start time: fixed to 29 August at 13:00 UTC (current year). Test/dev reseeds start immediately.
 
 Auction scenarios:
 - Scenario 1: Ceiling market cap reached before 72 hours, auction ends immediately
@@ -415,7 +416,17 @@ Refund mechanism:
 ### Auction
 - `GET /api/auction/status` - Get auction status (public)
 - `POST /api/auction/reset` - Dev-only auction reset: deletes pledges for the active auction and restarts it with a fresh 72h window; does not touch users
-- `POST /api/auction/reseed` - Dev-only full DB wipe + reseed: truncates `User`, `Auction`, `Pledge` and seeds admin, sample users, one active 24h auction targeting ~$1,000 (USD) using live BTC price to set dynamic `minPledgeSats`/`maxPledgeSats`, and 6–10 pledges totaling near the target.
+- `POST /api/auction/reseed[?mode=test|prod]` - Dev-only full DB wipe + reseed.
+  - `mode=test` (default): truncates `User`, `Auction`, `Pledge` and seeds admin, sample users, one active 24h auction (demo bounds) and 3–6 pledges.
+  - `mode=prod`: truncates tables and seeds admin plus a production-style auction only (no sample users/pledges) with:
+    - totalTokens: 100,000,000
+    - ceilingMarketCap: $15,000,000
+    - startTime: 29 August 13:00 UTC (current year)
+    - endTime: +72h
+  - Example:
+    ```bash
+    curl -X POST http://localhost:5000/api/auction/reseed?mode=prod
+    ```
 
 ### Status
 - `GET /api/status` - Backend runtime status used by the frontend env guard.
@@ -460,6 +471,8 @@ Refund mechanism:
 
 ### Reset DB Button (Dev-only)
 - `ResetDbButton.tsx` adds an AbortController with a 15s timeout for `/api/auction/reseed` to avoid hanging requests and shows a friendly timeout error.
+- It now supports selecting reseed mode `test` or `prod` and calls `/api/auction/reseed?mode=...` accordingly.
+- Prod mode seeds a production-style auction starting at 29 Aug 13:00 UTC (72h), no test users/pledges.
 
 Example internals:
 ```javascript

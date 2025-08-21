@@ -1,7 +1,7 @@
-// ResetDbButton.tsx
+// File: frontend/src/components/ResetDbButton.tsx
 // Purpose: Dev-only utility to fully wipe and reseed the DB via backend endpoint.
-// Behavior: POSTs to /api/auction/reseed, shows loading and result message. Render only in non-production.
-// Styling: TailwindCSS minimal secondary button.
+// Behavior: POSTs to /api/auction/reseed[?mode=test|prod], shows loading and result message. Render only in non-production.
+// Styling: TailwindCSS minimal controls.
 // Null-safety: Guards around fetch and envs. No-ops if API unavailable.
 import React, { useState } from 'react';
 
@@ -14,6 +14,7 @@ const ResetDbButton: React.FC<ResetDbButtonProps> = ({ apiUrl, className }) => {
   const [pending, setPending] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [mode, setMode] = useState<'test' | 'prod'>('test');
 
   const isDev = process.env.NODE_ENV !== 'production';
   if (!isDev) return null;
@@ -27,7 +28,11 @@ const ResetDbButton: React.FC<ResetDbButtonProps> = ({ apiUrl, className }) => {
       return;
     }
 
-    const ok = typeof window !== 'undefined' ? window.confirm('FULL DB RESEED? This will wipe Users, Auctions, and Pledges, then reseed demo data. Dev only.') : true;
+    const confirmText =
+      mode === 'prod'
+        ? 'PROD-STYLE RESEED: This will WIPE Users, Auctions, and Pledges, then seed ONLY the production-style auction (no test users/pledges). Start=29 Aug 13:00 UTC, 72h. Continue?'
+        : 'FULL DB RESEED (TEST): This will wipe Users, Auctions, and Pledges, then reseed demo users and pledges. Continue?';
+    const ok = typeof window !== 'undefined' ? window.confirm(confirmText) : true;
     if (!ok) return;
 
     try {
@@ -35,7 +40,8 @@ const ResetDbButton: React.FC<ResetDbButtonProps> = ({ apiUrl, className }) => {
       const controller = new AbortController();
       const timeoutMs = 15000; // 15s
       const t = setTimeout(() => controller.abort(), timeoutMs);
-      const res = await fetch(`${apiUrl}/api/auction/reseed`, { method: 'POST', signal: controller.signal });
+      const url = `${apiUrl}/api/auction/reseed?mode=${encodeURIComponent(mode)}`;
+      const res = await fetch(url, { method: 'POST', signal: controller.signal });
       clearTimeout(t);
       if (!res.ok) {
         const j = await res.json().catch(() => ({} as any));
@@ -56,6 +62,21 @@ const ResetDbButton: React.FC<ResetDbButtonProps> = ({ apiUrl, className }) => {
 
   return (
     <div className={`flex items-center gap-2 ${className ?? ''}`}>
+      <label className="text-xs text-gray-300" htmlFor="reseed-mode">
+        Mode
+      </label>
+      <select
+        id="reseed-mode"
+        className="text-xs bg-zinc-800/60 border border-zinc-600/50 rounded px-2 py-1 text-gray-100"
+        value={mode}
+        onChange={(e) => setMode((e.target.value as 'test' | 'prod') ?? 'test')}
+        disabled={pending}
+        data-testid="select-reseed-mode"
+      >
+        <option value="test">test (24h demo)</option>
+        <option value="prod">prod (29 Aug 13:00 UTC, 72h)</option>
+      </select>
+
       <button
         type="button"
         onClick={handleClick}
