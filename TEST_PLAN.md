@@ -10,6 +10,7 @@ Existing:
   - Loading/empty/error states; fetch error/user messaging; missing auctionId guard.
 - [x] `frontend/src/__tests__/recentActivity.rules.test.tsx`
   - Max 10 items, sorted by timestamp desc; exact badge rendering for refunded/confirmed.
+  - Avatar seed stability (DiceBear) derived from address; BTC address truncation rules.
 - [x] `frontend/src/__tests__/pledgeInterface.validation.test.tsx`
   - Wallet connection gating; min/max validation; balance gating; estimated tokens display rules.
 - [x] `frontend/src/__tests__/environmentGuard.banner.test.tsx`
@@ -22,6 +23,8 @@ Newly added edge-case tests:
   - Simulates WS-driven queue updates (reconnect/change) and asserts refetch behavior.
 - [x] `frontend/src/__tests__/recentActivity.transitions.test.tsx`
   - Mixed refunded/confirmed items and transition from confirmed → refunded with rerender.
+- [x] `frontend/src/__tests__/websocketContext.reconnect.test.tsx`
+  - Connect → auth → disconnect → timed reconnect → auth; asserts context flags update.
 
 How to run:
 ```bash
@@ -30,9 +33,15 @@ yarn test
 ```
 
 Planned next tests (frontend):
-- WebSocket reconnection jitter/backoff paths (if implemented) and idempotent refetch.
-- RecentActivity avatar seed consistency and truncation/formatting of long addresses.
-- Accessibility assertions: role-based queries for banners and lists, focus management on error overlays.
+- Optional a11y assertions (low priority): role-based queries for banners/lists; focus management on error overlays.
+
+### Next Up (shortlist)
+- [x] [frontend] Unit tests for `WebSocketContext` reconnect flow (re-subscribe/state reset on reconnect).
+- [x] [frontend] Avatar seed/truncation assertions in `recentActivity.rules.test.tsx`.
+- [frontend] Test util for fake clock helpers (advance 300ms debounce) to reduce duplication.
+- [backend] Tests for `GET /api/pledges/max-pledge/:auctionId` success and error handling (400/404) and numeric bounds.
+- [backend] Tests for `GET /api/auction/:id/stats` shape and caching semantics (Redis set/get).
+- [ci] Enforce Jest coverage thresholds: 70% lines/branches frontend; 70% backend to start.
 
 
 # Test Plan v1.0 (Automation-first)

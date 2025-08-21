@@ -45,4 +45,43 @@ describe('RecentActivity - rules', () => {
     expect(screen.getByText(/No recent activity/i)).toBeInTheDocument();
     expect(screen.getByTestId('text-connection-status').textContent).toMatch(/Disconnected/i);
   });
+
+  it('uses stable avatar seed and truncates BTC addresses only', () => {
+    const btcAddr = 'bc1q12345abcdefghijklmno999999999';
+    const nonBtc = 'user-1';
+    const cardinal = 'bc1paaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; // BTC-like → will be truncated and used as display
+
+    const items = [
+      mk(1, 0, { walletAddress: btcAddr }),
+      mk(2, 1, { walletAddress: nonBtc }),
+      mk(3, 2, { walletAddress: 'ignored-if-cardinal', cardinal_address: cardinal }),
+    ];
+
+    render(<RecentActivity activities={items} isConnected={true} />);
+
+    // BTC-like: truncated
+    const row1 = screen.getByTestId('activity-1');
+    const addr1 = screen.getByTestId('activity-address-1');
+    expect(addr1.textContent).toBe(`${btcAddr.slice(0, 6)}...${btcAddr.slice(-4)}`);
+    const img1 = row1.querySelector('img[alt="avatar"]') as HTMLImageElement;
+    expect(img1).toBeTruthy();
+    const seed1 = new URL(String(img1.src)).searchParams.get('seed');
+    expect(seed1 && decodeURIComponent(seed1)).toBe(btcAddr);
+
+    // Non-BTC: not truncated, avatar seed equals address
+    const row2 = screen.getByTestId('activity-2');
+    const addr2 = screen.getByTestId('activity-address-2');
+    expect(addr2.textContent).toBe(nonBtc);
+    const img2 = row2.querySelector('img[alt="avatar"]') as HTMLImageElement;
+    const seed2 = new URL(String(img2.src)).searchParams.get('seed');
+    expect(seed2 && decodeURIComponent(seed2)).toBe(nonBtc);
+
+    // Cardinal present: display prefers cardinal; BTC-like so truncated and used as seed
+    const row3 = screen.getByTestId('activity-3');
+    const addr3 = screen.getByTestId('activity-address-3');
+    expect(addr3.textContent).toBe(`${cardinal.slice(0, 6)}...${cardinal.slice(-4)}`);
+    const img3 = row3.querySelector('img[alt="avatar"]') as HTMLImageElement;
+    const seed3 = new URL(String(img3.src)).searchParams.get('seed');
+    expect(seed3 && decodeURIComponent(seed3)).toBe(cardinal);
+  });
 });
