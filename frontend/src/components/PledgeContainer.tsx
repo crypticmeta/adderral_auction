@@ -5,6 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { useWalletAddress } from 'bitcoin-wallet-adapter';
 import PledgeQueue from './PledgeQueue';
+import YourPledges from './YourPledges';
 import { useWebSocket } from '@/hooks/use-websocket';
 import type { AuctionState } from '@shared/types/auction';
 import PledgeInterface from './PledgeInterface';
@@ -171,13 +172,13 @@ const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, wa
             walletAddress={finalAddress}
           />
         ) : activeTab === 'queue' ? (
-          auctionId ? <PledgeQueue auctionId={auctionId} mode="queue" /> : (
+          auctionId ? <PledgeQueue auctionId={auctionId} /> : (
             <div className="text-center py-8 text-gray-400">
               No active auction found
             </div>
           )
         ) : (
-          auctionId ? <PledgeQueue auctionId={auctionId} mode="yours" /> : (
+          auctionId ? <YourPledges auctionId={auctionId} /> : (
             <div className="text-center py-8 text-gray-400">
               No active auction found
             </div>

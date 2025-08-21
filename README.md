@@ -163,6 +163,7 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Workflows trigger on changes under `shared/**` as well as their respective app folders.
   - Tabbed interface now includes three tabs: Make a Pledge, Pledge Queue, and Your Pledges
   - The last-selected tab persists across reloads via `localStorage` key `pledgeActiveTab`.
+  - Views are now split: `PledgeQueue` shows the live queue; `YourPledges` lists the connected user's pledges.
 
 - **Bitcoin Price Service**: Added real-time Bitcoin price fetching with 30-minute cache
   - Fetches BTC price from multiple sources (CoinGecko, Binance, CoinCap)
