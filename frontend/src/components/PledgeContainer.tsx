@@ -1,5 +1,6 @@
 // Container component that combines PledgeInterface and PledgeQueue
 // Purpose: Orchestrates pledge form and queue; derives wallet connection/address.
+// Tabs: Make a Pledge, Pledge Queue, Your Pledges (scoped to active auction)
 // Testing mode: Reads test wallet from localStorage (testWallet/testWalletConnected) to supply a wallet address when adapter is not connected.
 import React, { useState, useEffect } from 'react';
 import { useWalletAddress } from 'bitcoin-wallet-adapter';
@@ -14,13 +15,38 @@ interface PledgeContainerProps {
 }
 
 const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, walletAddress = '' }) => {
-  const [activeTab, setActiveTab] = useState<'form' | 'queue'>('form');
+  const [activeTab, setActiveTab] = useState<'form' | 'queue' | 'yours'>('form');
   const { auctionState } = useWebSocket();
   const [auctionId, setAuctionId] = useState<string>('');
   const wallet = useWalletAddress();
   const isTesting = process.env.NEXT_PUBLIC_TESTING === 'true';
   const [testingConnected, setTestingConnected] = useState(false);
   const [testingAddress, setTestingAddress] = useState<string>('');
+
+  // Restore last selected tab from localStorage (client-only)
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const saved = window.localStorage.getItem('pledgeActiveTab');
+      if (!saved) return;
+      if (saved === 'form' || saved === 'queue' || saved === 'yours') {
+        setActiveTab(saved);
+      }
+    } catch {
+      // noop
+    }
+  }, []);
+
+  // Persist tab on change
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      if (!activeTab) return;
+      window.localStorage.setItem('pledgeActiveTab', activeTab);
+    } catch {
+      // noop
+    }
+  }, [activeTab]);
 
   // Testing mode: hydrate localStorage test wallet address
   useEffect(() => {
@@ -108,6 +134,15 @@ const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, wa
           Make a Pledge
         </button>
         <button
+          onClick={() => setActiveTab('yours')}
+          className={`px-4 py-3 font-medium text-sm ${activeTab === 'yours'
+            ? 'text-adderrels-500 border-b-2 border-adderrels-500'
+            : 'text-gray-400 hover:text-gray-300'
+            }`}
+        >
+          Your Pledges
+        </button>
+        <button
           onClick={() => setActiveTab('queue')}
           className={`px-4 py-3 font-medium text-sm ${activeTab === 'queue'
             ? 'text-adderrels-500 border-b-2 border-adderrels-500'
@@ -135,8 +170,14 @@ const PledgeContainer: React.FC<PledgeContainerProps> = ({ isWalletConnected, wa
             isWalletConnected={finalIsWalletConnected}
             walletAddress={finalAddress}
           />
+        ) : activeTab === 'queue' ? (
+          auctionId ? <PledgeQueue auctionId={auctionId} mode="queue" /> : (
+            <div className="text-center py-8 text-gray-400">
+              No active auction found
+            </div>
+          )
         ) : (
-          auctionId ? <PledgeQueue auctionId={auctionId} /> : (
+          auctionId ? <PledgeQueue auctionId={auctionId} mode="yours" /> : (
             <div className="text-center py-8 text-gray-400">
               No active auction found
             </div>

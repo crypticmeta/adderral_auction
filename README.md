@@ -161,7 +161,8 @@ A new background task now verifies pledge txids against mempool.space and marks 
 - **CI/CD Workflows Updated**
   - Backend and Frontend GitHub Actions now build with repository root context so Docker can access `shared/` during builds.
   - Workflows trigger on changes under `shared/**` as well as their respective app folders.
-  - Tabbed interface to switch between pledge form and queue
+  - Tabbed interface now includes three tabs: Make a Pledge, Pledge Queue, and Your Pledges
+  - The last-selected tab persists across reloads via `localStorage` key `pledgeActiveTab`.
 
 - **Bitcoin Price Service**: Added real-time Bitcoin price fetching with 30-minute cache
   - Fetches BTC price from multiple sources (CoinGecko, Binance, CoinCap)

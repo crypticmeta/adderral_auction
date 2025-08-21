@@ -1,8 +1,7 @@
 // PledgeQueue component for displaying pledge queue status
 // Component: PledgeQueue
-// Shows recent pledge activity with user avatars (random via DiceBear),
-// truncated usernames from addresses, real-time queue updates, and
-// estimated ADDERRELS allocations per pledge based on current auction totals.
+// Shows either the live queue table (mode: 'queue') or "Your Pledges" list (mode: 'yours').
+// Includes avatars (DiceBear), truncated usernames, live updates, and allocation estimates.
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useWalletAddress } from 'bitcoin-wallet-adapter';
 import { useWebSocket } from '../contexts/WebSocketContext';
@@ -10,9 +9,10 @@ import type { PledgeItem, QueuePositionEvent } from '@shared/types/common';
 
 interface PledgeQueueProps {
   auctionId: string;
+  mode?: 'queue' | 'yours';
 }
 
-const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
+const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId, mode = 'queue' }) => {
   const [queuedPledges, setQueuedPledges] = useState<PledgeItem[]>([]);
   const [userPledges, setUserPledges] = useState<PledgeItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -208,7 +208,7 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
 
   return (
     <div className="bg-gradient-to-br from-dark-800/50 to-dark-700/50 backdrop-blur-md border border-primary-500/30 rounded-xl p-6 transition-all hover:border-primary-500/60 hover:shadow-glow-md">
-      <h2 className="text-2xl font-semibold mb-2 text-white">Pledge Queue</h2>
+      <h2 className="text-2xl font-semibold mb-2 text-white">{mode === 'yours' ? 'Your Pledges' : 'Pledge Queue'}</h2>
 
       {error && (
         <div className="bg-gradient-to-r from-red-600/20 to-red-700/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg mb-4 text-sm">
@@ -216,52 +216,56 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
         </div>
       )}
 
-      {userPledges.length > 0 && (
+      {/* Your Pledges panel */}
+      {mode === 'yours' && (
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-3 text-white">Your Pledges</h3>
-          <div className="space-y-2">
-            {userPledges.map((pledge) => (
-              <div
-                key={pledge.id}
-                className={`p-3 rounded-lg border ${pledge.processed
-                    ? 'bg-green-600/10 border-green-500/30 text-green-400'
-                    : 'bg-blue-600/10 border-blue-500/30 text-blue-400'
-                  }`}
-              >
-                <div className="flex justify-between items-center">
-                  <div>
-                    <span className="font-semibold">{(pledge.satsAmount / 1e8).toFixed(8)} BTC</span>
-                    <div className="text-xs mt-1">
-                      {pledge.processed ? (
-                        <span className="flex items-center">
-                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                          Processed
-                        </span>
-                      ) : (
-                        <span className="flex items-center">
-                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                          </svg>
-                          In Queue
-                        </span>
-                      )}
+          {userPledges.length === 0 ? (
+            <div className="text-center py-6 text-gray-400">No pledges yet</div>
+          ) : (
+            <div className="space-y-2">
+              {userPledges.map((pledge) => (
+                <div
+                  key={pledge.id}
+                  className={`p-3 rounded-lg border ${pledge.processed ? 'bg-green-600/10 border-green-500/30 text-green-400' : 'bg-blue-600/10 border-blue-500/30 text-blue-400'}`}
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="font-semibold">{(pledge.satsAmount / 1e8).toFixed(8)} BTC</span>
+                      <div className="text-xs mt-1">
+                        {pledge.processed ? (
+                          <span className="flex items-center">
+                            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                            Processed
+                          </span>
+                        ) : (
+                          <span className="flex items-center">
+                            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                            </svg>
+                            In Queue
+                          </span>
+                        )}
+                      </div>
                     </div>
+                    {!pledge.processed && (
+                      <div className="text-right">
+                        <div className="text-xs text-gray-400">Position</div>
+                        <div className="font-bold">{pledge.queuePosition ?? '—'}</div>
+                      </div>
+                    )}
                   </div>
-                  {!pledge.processed && (
-                    <div className="text-right">
-                      <div className="text-xs text-gray-400">Position</div>
-                      <div className="font-bold">{pledge.queuePosition ?? '—'}</div>
-                    </div>
-                  )}
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
+      {/* Queue panel */}
+      {mode === 'queue' && (
       <div>
         {queuedPledges.filter(p => !p.processed).length === 0 ? (
           <div className="text-center py-6 text-gray-400">
@@ -340,6 +344,7 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 };
