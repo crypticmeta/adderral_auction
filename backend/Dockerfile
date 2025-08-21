@@ -72,4 +72,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD node -e "require('net').createConnection({host:'127.0.0.1',port:process.env.PORT||5000}).on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))" || exit 1
 
 # Start server
-CMD ["node", "dist/server.js"]
+CMD ["node", "dist/src/server.js"]
