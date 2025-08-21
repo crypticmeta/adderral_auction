@@ -1,5 +1,6 @@
 // Auction status component with real-time updates from WebSocket
 import React from 'react';
+import { CountdownTimer } from './countdown-timer';
 import { useWebSocket } from '@/hooks/use-websocket';
 
 const AuctionStatus: React.FC = () => {
@@ -68,48 +69,67 @@ const AuctionStatus: React.FC = () => {
   }
 
   const progress = calculateProgress();
+  const nowMsAS = typeof auctionState.serverTimeMs === 'number'
+    ? (auctionState.serverTimeMs as number)
+    : (typeof window !== 'undefined' ? Date.now() : 0);
+  const isPreStart = typeof auctionState.startTimeMs === 'number'
+    ? nowMsAS < (auctionState.startTimeMs as number)
+    : false;
 
   return (
     <div className="bg-gradient-to-br from-dark-800/50 to-dark-700/50 backdrop-blur-md border border-primary-500/30 rounded-xl p-6 transition-all hover:border-primary-500/60 hover:shadow-glow-md">
       <h2 className="text-2xl font-semibold mb-6 text-white">Auction Status</h2>
       
       {/* Auction status banner */}
-      <div className={`mb-6 p-4 rounded-lg ${auctionState.isActive ? 'bg-gradient-to-r from-green-600/20 to-green-700/20 border border-green-500/30 text-green-400' : 'bg-gradient-to-r from-red-600/20 to-red-700/20 border border-red-500/30 text-red-400'}`}>
+      <div className={`mb-6 p-4 rounded-lg ${isPreStart
+        ? 'bg-gradient-to-r from-amber-600/20 to-amber-700/20 border border-amber-500/30 text-amber-300'
+        : auctionState.isActive
+          ? 'bg-gradient-to-r from-green-600/20 to-green-700/20 border border-green-500/30 text-green-400'
+          : 'bg-gradient-to-r from-red-600/20 to-red-700/20 border border-red-500/30 text-red-400'}`}>
         <div className="flex items-center">
-          <div className={`h-3 w-3 rounded-full mr-3 ${auctionState.isActive ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+          <div className={`h-3 w-3 rounded-full mr-3 ${isPreStart ? 'bg-amber-400 animate-pulse' : auctionState.isActive ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
           <span className="font-medium">
-            {auctionState.isActive ? 'Auction is Active' : 'Auction has Ended'}
+            {isPreStart ? 'Auction Starts Soon' : auctionState.isActive ? 'Auction is Active' : 'Auction has Ended'}
           </span>
         </div>
       </div>
       
       {/* Progress bar */}
       <div className="mb-6">
-        <div className="flex justify-between mb-2">
-          <span className="text-sm font-medium text-gray-400">
-            {formatUSD(auctionState.currentMarketCap)} / {formatUSD(auctionState.ceilingMarketCap)}
-          </span>
-          <span className="text-sm font-medium text-white">{progress.toFixed(2)}%</span>
-        </div>
-        <div className="w-full bg-dark-900/50 rounded-full h-3 overflow-hidden">
-          <div 
-            className="bg-gradient-to-r from-primary-500 to-accent-pink h-3 rounded-full transition-all duration-500 relative"
-            style={{ width: `${progress}%` }}
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+        {isPreStart ? (
+          <div className="text-center text-gray-500 text-sm py-6 border border-dashed border-gray-700 rounded-xl">
+            Progress will appear when the auction starts.
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="flex justify-between mb-2">
+              <span className="text-sm font-medium text-gray-400">
+                {formatUSD(auctionState.currentMarketCap)} / {formatUSD(auctionState.ceilingMarketCap)}
+              </span>
+              <span className="text-sm font-medium text-white">{progress.toFixed(2)}%</span>
+            </div>
+            <div className="w-full bg-dark-900/50 rounded-full h-3 overflow-hidden">
+              <div 
+                className="bg-gradient-to-r from-primary-500 to-accent-pink h-3 rounded-full transition-all duration-500 relative"
+                style={{ width: `${progress}%` }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
       
-      {/* Time remaining & Price */}
+      {/* Time remaining or Starts In & Price */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
         <div className="bg-gradient-to-br from-dark-900/50 to-dark-800/50 p-4 rounded-lg border border-primary-500/20">
-          <h3 className="text-sm font-medium text-gray-400 mb-1">Time Remaining</h3>
-          <p className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-accent-pink bg-clip-text text-transparent">
-            {auctionState.isActive && auctionState.timeRemaining
-              ? `${String(auctionState.timeRemaining.hours ?? 0).padStart(2, '0')}:${String(auctionState.timeRemaining.minutes ?? 0).padStart(2, '0')}:${String(auctionState.timeRemaining.seconds ?? 0).padStart(2, '0')}`
-              : '00:00:00'}
-          </p>
+          <h3 className="text-sm font-medium text-gray-400 mb-3">{isPreStart ? 'Starts In' : 'Time Remaining'}</h3>
+          <CountdownTimer
+            timeRemaining={auctionState.timeRemaining}
+            startTimeMs={auctionState.startTimeMs}
+            endTimeMs={auctionState.endTimeMs}
+            serverTimeMs={auctionState.serverTimeMs}
+          />
         </div>
         <div className="bg-gradient-to-br from-dark-900/50 to-dark-800/50 p-4 rounded-lg border border-primary-500/20">
           <h3 className="text-sm font-medium text-gray-400 mb-1">Current Token Price</h3>

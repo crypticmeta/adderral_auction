@@ -42,6 +42,7 @@ A new background task now verifies pledge txids against mempool.space and marks 
     - Tokens: K/M/B automatically (no fixed `M` suffix). Implemented in `frontend/src/components/auction-stats.tsx`.
     - USD values: compact currency, e.g. `$5K`, `$15M`.
     - Null-safe parsing with fallbacks.
+  - Pre-start behavior: before the auction start time, the UI now shows a "Starts In" countdown (including days when >24h), hides the progress bar and raised stats, and disables the pledge interface.
 # Adderrels Auction Platform
 
 ## Recent Updates

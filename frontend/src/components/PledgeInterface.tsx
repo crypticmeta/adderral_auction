@@ -29,6 +29,11 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
   const auctionId = auctionState?.id as string | undefined;
   const isTesting = process.env.NEXT_PUBLIC_TESTING === 'true';
 
+  // Disable pledging before auction starts
+  const isPreStart = typeof auctionState?.startTimeMs === 'number' && typeof auctionState?.serverTimeMs === 'number'
+    ? ((auctionState?.serverTimeMs as number) < (auctionState?.startTimeMs as number))
+    : false;
+
   // Backend BTC price
   const [backendPrice, setBackendPrice] = useState<number | null>(null);
   const [priceLoading, setPriceLoading] = useState(false);
@@ -121,6 +126,11 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
   const handlePledge = async () => {
     setMessage(null);
 
+    if (isPreStart) {
+      setMessage({ type: 'error', title: 'Auction has not started', description: 'Pledging will open when the auction starts.' });
+      return;
+    }
+
     if (!isWalletConnected) {
       setMessage({ type: 'error', title: 'Wallet not connected', description: 'Please connect your wallet to make a pledge' });
       return;
@@ -198,7 +208,7 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
   // No auto-verify timers on frontend; no cleanup required.
 
   const disabled = !isWalletConnected || isPending || !pledgeAmount;
-  const isDisabled = disabled || exceedsBalance;
+  const isDisabled = isPreStart || disabled || exceedsBalance;
 
   return (
     <div className="glass-card p-8 rounded-3xl">
@@ -208,6 +218,15 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
           <span className="text-sm font-bold">₿</span>
         </div>
       </div>
+
+      {isPreStart && (
+        <div className="mb-6 rounded-xl px-4 py-3 text-sm border bg-amber-500/10 border-amber-500/40 text-amber-300">
+          <p className="font-semibold">Pledging opens when the auction starts.</p>
+          {typeof auctionState?.startTimeMs === 'number' && (
+            <p className="text-xs opacity-90 mt-1">Scheduled start (UTC): {new Date(auctionState.startTimeMs).toUTCString()}</p>
+          )}
+        </div>
+      )}
 
       {/* Limits */}
       <div className="bg-dark-800/50 p-4 rounded-xl mb-6 border border-gray-700">
@@ -277,6 +296,7 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
             onChange={(e) => setPledgeAmount(e.target.value)}
             data-testid="input-pledge-amount"
             className="w-full bg-dark-800 border border-gray-600 focus:border-adderrels-500 rounded-xl px-4 py-4 pr-16 text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-adderrels-500/50 transition-all duration-300"
+            disabled={isPreStart}
           />
           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">BTC</span>
         </div>
@@ -319,7 +339,9 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
 
       <div className="mt-4 text-center">
         <p className="text-sm text-gray-400">
-          {isWalletConnected ? 'Enter your BTC amount to participate in the auction' : 'Connect your wallet to participate in the auction'}
+          {isPreStart
+            ? 'Pledging is disabled until the auction starts.'
+            : (isWalletConnected ? 'Enter your BTC amount to participate in the auction' : 'Connect your wallet to participate in the auction')}
         </p>
       </div>
     </div>

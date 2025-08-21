@@ -220,6 +220,7 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <AuctionProgress
               timeRemaining={timeRemaining}
+              startTimeMs={(auctionState as any)?.startTimeMs}
               endTimeMs={endTimeMs}
               serverTimeMs={serverTimeMs}
               totalRaised={totalRaised}

@@ -70,6 +70,7 @@ export interface AuctionProgressProps {
   totalRaised: number; // in BTC
   hardCap?: number; // in BTC
   // Synchronized timing fields (ms since epoch)
+  startTimeMs?: number;
   endTimeMs?: number;
   serverTimeMs?: number;
 

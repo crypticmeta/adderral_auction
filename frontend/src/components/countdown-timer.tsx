@@ -1,7 +1,9 @@
 /**
  * CountdownTimer component
- * Purpose: Displays hours/minutes/seconds countdown for auction end.
- * Behavior: Ticks locally and can synchronize to server time via endTimeMs/serverTimeMs.
+ * Purpose: Displays countdown for auction start or end.
+ * Behavior: If serverTimeMs/startTimeMs indicate pre-start, counts down to start; otherwise to end.
+ *           Shows Days when remaining >= 24h; otherwise Hours/Minutes/Seconds.
+ *           Ticks locally and can synchronize to server time via target ms inputs.
  * Styling: Tailwind UI using the adderrels theme (border-adderrels-500/30 cards).
  * Null-safety: Falls back to safe defaults when props are missing or undefined.
  */
@@ -14,21 +16,24 @@ interface CountdownTimerProps {
         seconds: number;
     };
     // Optional synchronized timing inputs from server (ms since epoch)
+    startTimeMs?: number;
     endTimeMs?: number;
     serverTimeMs?: number;
 }
 
-export function CountdownTimer({ timeRemaining, endTimeMs, serverTimeMs }: CountdownTimerProps) {
+export function CountdownTimer({ timeRemaining, startTimeMs, endTimeMs, serverTimeMs }: CountdownTimerProps) {
     const [time, setTime] = useState(timeRemaining || { hours: 0, minutes: 0, seconds: 0 });
     const startWallClock = useRef<number | null>(null);
+    const [days, setDays] = useState(0);
 
     // Helper to compute h/m/s from ms
-    const toHMS = (ms: number) => {
+    const toDHMS = (ms: number) => {
         const clamped = Math.max(0, Math.floor(ms / 1000));
-        const hours = Math.floor(clamped / 3600);
+        const days = Math.floor(clamped / 86400);
+        const hours = Math.floor((clamped % 86400) / 3600);
         const minutes = Math.floor((clamped % 3600) / 60);
         const seconds = clamped % 60;
-        return { hours, minutes, seconds };
+        return { days, hours, minutes, seconds };
     };
 
     // Reset snapshot when props change
@@ -39,7 +44,7 @@ export function CountdownTimer({ timeRemaining, endTimeMs, serverTimeMs }: Count
         startWallClock.current = null; // reset drift baseline when data updates
     }, [timeRemaining, endTimeMs, serverTimeMs]);
 
-    const hasSync = useMemo(() => typeof endTimeMs === 'number' && typeof serverTimeMs === 'number', [endTimeMs, serverTimeMs]);
+    const hasSync = useMemo(() => typeof serverTimeMs === 'number' && (typeof startTimeMs === 'number' || typeof endTimeMs === 'number'), [startTimeMs, endTimeMs, serverTimeMs]);
 
     // Ticking interval
     useEffect(() => {
@@ -51,19 +56,39 @@ export function CountdownTimer({ timeRemaining, endTimeMs, serverTimeMs }: Count
                 }
                 const elapsed = Date.now() - (startWallClock.current as number);
                 const nowApprox = (serverTimeMs as number) + elapsed;
-                const remaining = Math.max(0, (endTimeMs as number) - nowApprox);
-                setTime(toHMS(remaining));
+                // Determine target: prefer start when in the future, else end
+                let target: number | undefined = undefined;
+                if (typeof startTimeMs === 'number' && nowApprox < (startTimeMs as number)) {
+                    target = startTimeMs as number;
+                } else if (typeof endTimeMs === 'number') {
+                    target = endTimeMs as number;
+                }
+                const remaining = Math.max(0, (target ?? nowApprox) - nowApprox);
+                const d = toDHMS(remaining);
+                setDays(d.days);
+                setTime({ hours: d.hours, minutes: d.minutes, seconds: d.seconds });
             } else if (time) {
                 // Fallback: decrement the snapshot each second
-                const ms = Math.max(0, (time.hours * 3600 + time.minutes * 60 + time.seconds - 1) * 1000);
-                setTime(toHMS(ms));
+                const ms = Math.max(0, ((days * 86400) + (time.hours * 3600) + (time.minutes * 60) + time.seconds - 1) * 1000);
+                const d = toDHMS(ms);
+                setDays(d.days);
+                setTime({ hours: d.hours, minutes: d.minutes, seconds: d.seconds });
             }
         }, 1000);
         return () => clearInterval(interval);
-    }, [hasSync, endTimeMs, serverTimeMs, time]);
+    }, [hasSync, startTimeMs, endTimeMs, serverTimeMs, time, days]);
 
+    const showDays = (days ?? 0) > 0;
     return (
-        <div className="grid grid-cols-3 gap-4 text-center">
+        <div className={`grid ${showDays ? 'grid-cols-4' : 'grid-cols-3'} gap-4 text-center`}>
+            {showDays && (
+                <div className="bg-gradient-to-b from-dark-800 to-dark-900 p-4 rounded-xl border border-adderrels-500/30">
+                    <div className="text-3xl font-bold number-glow" data-testid="countdown-days">
+                        {(days ?? 0).toString().padStart(2, '0')}
+                    </div>
+                    <div className="text-sm text-gray-400">Days</div>
+                </div>
+            )}
             <div className="bg-gradient-to-b from-dark-800 to-dark-900 p-4 rounded-xl border border-adderrels-500/30">
                 <div
                     className="text-3xl font-bold number-glow"
