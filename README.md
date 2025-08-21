@@ -1,3 +1,4 @@
+<!-- File: README.md | Purpose: Project overview, setup, and testing. Includes backend test isolation notes (global beforeEach truncation) and the beforeEach data-creation pattern. -->
 ## Shared Types
 
 - Location: `shared/types/`
@@ -554,6 +555,11 @@ NEXT_PUBLIC_TESTING=true
   - Runs `prisma generate` and `prisma migrate deploy` in the backend CWD
   - Emits detailed logs; enable extra logs via `DEBUG=testcontainers*`
 - Per-test setup `backend/src/tests/setup/jest.setup.ts` clears Redis keys and truncates core tables for isolation.
+- Backend test isolation tips (important):
+  - Global `beforeEach` truncates `User`, `Auction`, and `Pledge` tables and clears Redis between tests.
+  - Therefore, create any required test data inside each suite's `beforeEach`, not in `beforeAll`.
+  - Example updated tests: `backend/src/tests/maxPledge.routes.test.ts`, `backend/src/tests/auctionStats.routes.test.ts` create auctions in `beforeEach` and sanity-check via `GET /api/auction/:id`.
+  - Stub external dependencies (e.g., BTC price) in `beforeAll` and restore in `afterAll` to avoid live network during API tests.
 
 ### Scheduler interval safety
 

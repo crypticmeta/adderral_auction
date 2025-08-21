@@ -37,8 +37,7 @@ Planned next tests (frontend):
 
 ### Next Up (shortlist)
 - [x] [frontend] Unit tests for `WebSocketContext` reconnect flow (re-subscribe/state reset on reconnect).
-- [x] [frontend] Avatar seed/truncation assertions in `recentActivity.rules.test.tsx`.
-- [frontend] Test util for fake clock helpers (advance 300ms debounce) to reduce duplication.
+- [x] [frontend] Avatar seed/truncation assertions in `recentActivity.rules.test.tsx`
 - [backend] Tests for `GET /api/pledges/max-pledge/:auctionId` success and error handling (400/404) and numeric bounds.
 - [backend] Tests for `GET /api/auction/:id/stats` shape and caching semantics (Redis set/get).
 - [ci] Enforce Jest coverage thresholds: 70% lines/branches frontend; 70% backend to start.
@@ -66,6 +65,14 @@ Goals:
 - Run tests:
   - Ephemeral: `yarn test` (from `backend/`, Docker required).
   - Local: `yarn services:up` → set envs → `yarn test:local` → `yarn services:down`.
+
+Backend test isolation tips (important):
+- Global Jest `beforeEach` in `backend/src/tests/setup/jest.setup.ts` truncates `User`, `Auction`, and `Pledge` tables and clears Redis between tests.
+- Always create required fixtures inside each suite's `beforeEach` (not `beforeAll`).
+- Example suites following this pattern:
+  - `backend/src/tests/maxPledge.routes.test.ts`
+  - `backend/src/tests/auctionStats.routes.test.ts`
+  - They also perform a quick sanity `GET /api/auction/:id` check after creating the auction.
 
 ## 3) Automated Backend Tests
 
