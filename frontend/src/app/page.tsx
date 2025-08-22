@@ -112,12 +112,19 @@ export default function Home() {
 
   // Loading screen when WebSocket is connecting or auction data is not available
   if (!auctionState) {
+    const noAuctionNetworkMsg = error && /No active auction found for/i.test(error)
+      ? 'No auction exists for the current network.'
+      : null;
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900">
         <div className="text-center">
           <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-adderrels-400 to-adderrels-600 bg-clip-text text-transparent">ADDERRELS FCFS Auction</h1>
 
-          {error ? (
+          {noAuctionNetworkMsg ? (
+            <>
+              <p className="text-yellow-400 mb-2">{noAuctionNetworkMsg}</p>
+            </>
+          ) : error ? (
             <>
               <p className="text-red-400 mb-2">Connection issue: {error}</p>
             </>

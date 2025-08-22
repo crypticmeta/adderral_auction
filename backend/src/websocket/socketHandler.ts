@@ -10,6 +10,7 @@ import { Redis } from 'ioredis';
 import { bitcoinPriceService } from '../services/bitcoinPriceService';
 import config from '../config/config';
 import prisma from '../config/prisma';
+import type { BtcNetwork } from '../generated/prisma';
 
 type PledgeWithUser = {
   id: string;
@@ -166,9 +167,12 @@ export const initializeSocketIO = (server: http.Server): Server => {
 // Send auction status to a client
 export const sendAuctionStatus = async (socket: any) => {
   try {
+    const toEnumNetwork = (n: string | null | undefined): BtcNetwork =>
+      (String(n).toLowerCase() === 'testnet' ? 'TESTNET' : 'MAINNET');
+    const targetNet = toEnumNetwork(config.btcNetwork);
     // Get auction data from database
     const auction = await prisma.auction.findFirst({
-      where: { isActive: true },
+      where: { isActive: true, network: targetNet },
       orderBy: { startTime: 'desc' },
       include: {
         pledges: {
@@ -180,7 +184,7 @@ export const sendAuctionStatus = async (socket: any) => {
     });
 
     if (!auction) {
-      socket.emit(SocketEvents.ERROR, { message: 'No active auction found' });
+      socket.emit(SocketEvents.ERROR, { message: `No active auction found for ${targetNet}` });
       return;
     }
 

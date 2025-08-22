@@ -8,6 +8,7 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../../../config/prisma';
 import { addHours } from 'date-fns';
+import config from '../../../config/config';
 
 // Extend Express Request type to include user property
 declare global {
@@ -19,6 +20,10 @@ declare global {
 }
 
 // Prisma client provided by singleton
+
+// Helper: map env network to Prisma enum
+const toEnumNetwork = (n: string | null | undefined) =>
+  (String(n).toLowerCase() === 'testnet' ? 'TESTNET' : 'MAINNET');
 
 // Middleware to verify admin access
 /**
@@ -72,7 +77,7 @@ export const reseedDb = async (req: Request, res: Response) => {
         id: 'admin',
         ordinal_address: 'bc1pkddf9em6k82spy0ysxdqp5t5puuwdkn6prhcqvhf6vf8tcc686lq4uy0ca',
         connected: true,
-        network: 'mainnet',
+        network: String(config.btcNetwork || 'mainnet').toLowerCase(),
       },
     });
 
@@ -107,7 +112,7 @@ export const reseedDb = async (req: Request, res: Response) => {
               ordinal_address: u.ordinal_address,
               cardinal_address: u.cardinal_address,
               connected: true,
-              network: 'testnet',
+              network: String(config.btcNetwork || 'mainnet').toLowerCase(),
             },
           })
         )
@@ -134,7 +139,7 @@ export const reseedDb = async (req: Request, res: Response) => {
         isCompleted: false,
         minPledgeSats,
         maxPledgeSats,
-        network: 'MAINNET',
+        network: toEnumNetwork(config.btcNetwork),
       },
     });
 
@@ -171,7 +176,7 @@ export const reseedDb = async (req: Request, res: Response) => {
             depositAddress: 'generated-deposit-address',
             status: 'confirmed',
             verified: true,
-            network: 'MAINNET'
+            network: toEnumNetwork(config.btcNetwork)
           },
         });
       }
@@ -211,7 +216,7 @@ export const resetAuction = async (req: Request, res: Response) => {
   try {
     // Get the current auction
     const currentAuction = await prisma.auction.findFirst({
-      where: { isActive: true }
+      where: { isActive: true, network: toEnumNetwork(config.btcNetwork) }
     });
 
     if (!currentAuction) {

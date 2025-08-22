@@ -5,11 +5,12 @@
 
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
+import config from '../config/config';
 import { Server } from 'socket.io';
-import type { AuctionType, MultiWalletData } from '@shared/types';
 import { bitcoinPriceService } from '../services/bitcoinPriceService';
 import { redisClient } from '../config/redis';
 import { addHours } from 'date-fns';
+import type { BtcNetwork } from '../generated/prisma';
 
 // Prisma client provided by singleton
 
@@ -20,6 +21,10 @@ let io: Server;
 export const setSocketServer = (socketServer: Server) => {
   io = socketServer;
 };
+
+// Helper: map env network to Prisma enum
+const toEnumNetwork = (n: string | null | undefined): BtcNetwork =>
+  (String(n).toLowerCase() === 'testnet' ? 'TESTNET' : 'MAINNET');
 
 // Calculate current market cap based on BTC raised and current BTC price
 const calculateCurrentMarketCap = async (totalBTCPledged: number): Promise<number> => {
@@ -140,7 +145,8 @@ export const createAuction = async (req: Request, res: Response) => {
         isActive: true,
         isCompleted: false,
         totalBTCPledged: 0,
-        refundedBTC: 0 // Track refunded BTC amounts
+        refundedBTC: 0, // Track refunded BTC amounts
+        network: toEnumNetwork(config.btcNetwork)
       }
     });
     
@@ -201,7 +207,12 @@ export const getAuction = async (req: Request, res: Response) => {
 // Get all auctions
 export const getAllAuctions = async (req: Request, res: Response) => {
   try {
+    const qpNet = (req?.query?.network as string | undefined) || null;
+    const where: any = {};
+    // Filter by explicit query param if provided, else by configured network
+    where.network = qpNet ? toEnumNetwork(qpNet) : toEnumNetwork(config.btcNetwork);
     const auctions = await prisma.auction.findMany({
+      where,
       orderBy: { startTime: 'desc' }
     });
     
@@ -619,6 +630,7 @@ export const resetAuction = async (req: Request, res: Response) => {
         // min/max in sats
         minPledgeSats: 100_000,
         maxPledgeSats: 50_000_000,
+        network: toEnumNetwork(config.btcNetwork),
       },
     });
 

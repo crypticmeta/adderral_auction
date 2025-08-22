@@ -1,6 +1,7 @@
 /**
  * Pledge controller
  * Handles pledge creation, verification, and retrieval for the auction system
+ * Network safety: enforces auction/pledge network alignment and validates deposit address network
  */
 
 import { Request, Response } from 'express';
@@ -9,7 +10,8 @@ import config from '../config/config';
 import { Server } from 'socket.io';
 import { PledgeQueueService } from '../services/pledgeQueueService';
 import { BitcoinPriceService } from '../services/bitcoinPriceService';
-import { broadcastPledgeCreated, broadcastPledgeVerified } from '../websocket/socketHandler';
+import { broadcastPledgeCreated } from '../websocket/socketHandler';
+import type { BtcNetwork } from '../generated/prisma';
 
 // Prisma client provided by singleton
 
@@ -25,18 +27,40 @@ export const setSocketServer = (socketServer: Server) => {
   pledgeQueueService.setSocketServer(socketServer);
 };
 
+// Helpers: map config network to Prisma enum and validate BTC address by network
+const toEnumNetwork = (n: string | null | undefined): BtcNetwork =>
+  (String(n).toLowerCase() === 'testnet' ? 'TESTNET' : 'MAINNET');
+
+const isAddressForNetwork = (addr: string | null | undefined, net: BtcNetwork): boolean => {
+  const a = (addr || '').trim();
+  if (!a) return false;
+  // Bech32
+  const isMainBech32 = a.startsWith('bc1');
+  const isTestBech32 = a.startsWith('tb1');
+  // Legacy/P2SH rough checks
+  const isMainLegacy = a.startsWith('1') || a.startsWith('3');
+  const isTestLegacy = a.startsWith('m') || a.startsWith('n') || a.startsWith('2');
+  if (net === 'MAINNET') return isMainBech32 || isMainLegacy;
+  return isTestBech32 || isTestLegacy;
+};
+
 /**
  * Get a deposit address for the active auction (pre-payment step)
  */
 export const getDepositAddress = async (_req: Request, res: Response) => {
   try {
-    const auction = await prisma.auction.findFirst({ where: { isActive: true } });
+    // Scope to configured network
+    const auction = await prisma.auction.findFirst({ where: { isActive: true, network: toEnumNetwork(config.btcNetwork) } });
     if (!auction) {
       return res.status(404).json({ error: 'No active auction found' });
     }
     const depositAddress = (config.depositAddress || '').trim();
     if (!depositAddress) {
       return res.status(500).json({ error: 'Deposit address not configured. Set BTC_DEPOSIT_ADDRESS in env.' });
+    }
+    // Validate deposit address network alignment
+    if (!isAddressForNetwork(depositAddress, auction.network)) {
+      return res.status(500).json({ error: `Configured deposit address does not match ${auction.network} network` });
     }
     return res.status(200).json({ depositAddress, network: auction.network });
   } catch (error) {
@@ -207,13 +231,19 @@ export const createPledge = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Get active auction
+    // Get active auction for configured network only
     const auction = await prisma.auction.findFirst({
-      where: { isActive: true }
+      where: { isActive: true, network: toEnumNetwork(config.btcNetwork) }
     });
 
     if (!auction) {
       return res.status(404).json({ error: 'No active auction found' });
+    }
+
+    // Optional: If client provided a network inside walletDetails, require it to match auction network
+    const clientNet = (walletDetails?.network as string | undefined) || null;
+    if (clientNet && toEnumNetwork(clientNet) !== auction.network) {
+      return res.status(400).json({ error: `Wallet network (${clientNet}) does not match auction network (${auction.network})` });
     }
 
     // Validate pledge amount (compare in BTC, source of truth in sats)
@@ -227,12 +257,16 @@ export const createPledge = async (req: Request, res: Response) => {
     }
     // Use provided deposit address when available (recommended); fallback to placeholder
     const depositAddress = depositFromBody ?? `btc_deposit_${Date.now().toString(16)}`;
+    // Validate deposit address network alignment only if provided by client
+    if (depositFromBody && !isAddressForNetwork(depositAddress, auction.network)) {
+      return res.status(400).json({ error: `Deposit address does not match ${auction.network} network` });
+    }
 
     // Normalize wallet fields from walletDetails
     const cardinalAddress: string | null = (walletDetails?.cardinal as string | undefined) || null;
     const ordinalAddress: string | null = (walletDetails?.ordinal as string | undefined) || null;
 
-    // Create the pledge in the database
+    // Create the pledge in the database (inherit auction network)
     const pledge = await prisma.pledge.create({
       data: {
         userId,
