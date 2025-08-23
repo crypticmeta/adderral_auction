@@ -142,6 +142,9 @@ export default function Home() {
 
   // Null-safe derived values
   const totalTokensM = config?.totalTokens ? parseInt(config.totalTokens) / 1_000_000 : 0;
+  const tokensOnSaleM = config?.tokensOnSale
+    ? parseInt(config.tokensOnSale) / 1_000_000
+    : totalTokensM;
   const currentMarketCapUSD = typeof currentMarketCap === 'number' ? currentMarketCap : 0;
   const ceilingUSD = typeof ceilingMarketCap === 'number' && ceilingMarketCap > 0
     ? ceilingMarketCap
@@ -211,13 +214,14 @@ export default function Home() {
             </h1>
             <h2 className="text-2xl md:text-3xl font-bold text-gray-300 mb-2">First Come, First Served Auction</h2>
             <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-              Join the ADDERRELS token FCFS auction. {totalTokensM}M tokens available with a ceiling market cap of {formatUSDCompact(ceilingUSD)}.
+              Join the ADDERRELS token FCFS auction. {tokensOnSaleM}M tokens on sale with a ceiling market cap of {formatUSDCompact(ceilingUSD)}.
             </p>
           </div>
 
           {/* Auction Stats */}
           <AuctionStats
             totalTokens={(totalTokensM).toString()}
+            tokensOnSale={(tokensOnSaleM).toString()}
             ceilingMarketCap={ceilingUSD}
             currentMarketCap={currentMarketCapUSD}
             duration={maxDurationLabel}

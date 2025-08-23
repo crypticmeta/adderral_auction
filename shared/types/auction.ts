@@ -18,6 +18,7 @@ export interface AuctionActivity {
 // Core auction config sent from backend
 export interface AuctionConfig {
   totalTokens: string;
+  tokensOnSale: string; // distinct subset of total supply available for sale
   ceilingMarketCapUSD: string;
   minPledgeBTC: string;
   maxPledgeBTC: string;

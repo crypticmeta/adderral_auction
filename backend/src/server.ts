@@ -11,6 +11,7 @@ import authRoutes from './routes/authRoutes';
 import auctionRoutes from './routes/auctionRoutes';
 import pledgeRoutes from './routes/pledgeRoutes';
 import statusRoutes from './routes/statusRoutes';
+import testingRoutes from './routes/testingRoutes';
 import { initializeSocketIO } from './websocket/socketHandler';
 import { setSocketServer } from './controllers/pledgeController';
 import { setSocketServer as setAuctionSocketServer } from './controllers/auctionController';
@@ -48,6 +49,12 @@ app.use('/api/auth', authRoutes);
 app.use('/api/auction', auctionRoutes);
 app.use('/api/pledges', pledgeRoutes);
 app.use('/api/status', statusRoutes);
+
+// Testing-only routes (gated by TESTING env)
+if (config.testing) {
+  app.use('/api/testing', testingRoutes);
+  console.log('Testing endpoints enabled at /api/testing');
+}
 
 // Health check route
 app.get('/health', (req, res) => {

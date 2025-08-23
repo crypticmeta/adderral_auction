@@ -3,6 +3,8 @@ import { formatNumberCompact, formatUSDCompact } from '@/lib/format';
 interface AuctionStatsProps {
     // totalTokens is passed in as a string representing millions (e.g., "100" for 100M, "0.01" for 10K)
     totalTokens: string;
+    // tokensOnSale is passed in as a string representing millions; optional for back-compat
+    tokensOnSale?: string;
     // ceiling market cap is in USD (string or number)
     ceilingMarketCap: string | number;
     // current market cap is in USD (string or number)
@@ -11,11 +13,15 @@ interface AuctionStatsProps {
     duration: string;
 }
 
-export function AuctionStats({ totalTokens, ceilingMarketCap, currentMarketCap, duration }: AuctionStatsProps) {
+export function AuctionStats({ totalTokens, tokensOnSale, ceilingMarketCap, currentMarketCap, duration }: AuctionStatsProps) {
     // Null-safe parsing
     const totalTokensM = Number(totalTokens ?? '0');
     const totalTokensRaw = Number.isFinite(totalTokensM) ? Math.max(0, totalTokensM * 1_000_000) : 0;
     const totalTokensLabel = formatNumberCompact(totalTokensRaw);
+
+    const tokensOnSaleM = Number(tokensOnSale ?? 'NaN');
+    const tokensOnSaleRaw = Number.isFinite(tokensOnSaleM) ? Math.max(0, tokensOnSaleM * 1_000_000) : undefined;
+    const tokensOnSaleLabel = typeof tokensOnSaleRaw === 'number' ? formatNumberCompact(tokensOnSaleRaw) : null;
 
     const ceilingUsdRaw = typeof ceilingMarketCap === 'number' ? ceilingMarketCap : Number(ceilingMarketCap ?? '0');
     const ceilingUsd = Number.isFinite(ceilingUsdRaw) ? Math.max(0, ceilingUsdRaw) : 0;
@@ -29,15 +35,18 @@ export function AuctionStats({ totalTokens, ceilingMarketCap, currentMarketCap, 
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-            {/* Total Tokens */}
+            {/* Tokens On Sale (primary) with total supply context */}
             <div className="glass-card p-6 rounded-2xl text-center transform hover:scale-105 transition-all duration-300">
                 <div className="w-12 h-12 mx-auto mb-4 rounded-full overflow-hidden">
                     <img src="/adderrel.png" alt="Tokens" className="w-full h-full object-contain" />
                 </div>
-                <h3 className="text-2xl font-bold number-glow" data-testid="text-total-tokens">
-                    {totalTokensLabel}
+                <h3 className="text-2xl font-bold number-glow" data-testid="text-tokens-on-sale">
+                    {tokensOnSaleLabel ?? totalTokensLabel}
                 </h3>
-                <p className="text-gray-400">Total Tokens</p>
+                <p className="text-gray-400">Tokens On Sale</p>
+                <p className="text-xs text-gray-500 mt-1" data-testid="text-total-supply-subtle">
+                    Total Supply: {totalTokensLabel}
+                </p>
             </div>
 
             {/* Ceiling */}

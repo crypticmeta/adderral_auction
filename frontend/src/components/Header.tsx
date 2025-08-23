@@ -11,7 +11,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ConnectMultiButton, useWalletBalance } from 'bitcoin-wallet-adapter';
 import { useEffect, useState } from 'react';
-import ResetDbButton from './ResetDbButton';
 import type { WalletDetails } from '@shared/types/common';
 import { env } from '../config/env';
 import { useBtcNetwork } from '@/contexts/NetworkContext';
@@ -20,7 +19,6 @@ export default function Header() {
   const { network } = useBtcNetwork();
   const isTesting = env.testing;
   const [testConnected, setTestConnected] = useState(false);
-  const apiUrl = env.apiUrl;
   // Wallet balance (confirmed) from adapter; show only when connected
   const { balance, btcPrice } = useWalletBalance();
   const hasConnectedBalance = typeof balance?.confirmed === 'number' && Number.isFinite(balance.confirmed);
@@ -207,8 +205,6 @@ export default function Header() {
                 )}
               </div>
             )}
-            {/* Dev-only reseed button */}
-            <ResetDbButton apiUrl={apiUrl} />
             {!isTesting ? (
               <ConnectMultiButton
                 icon="/adderrel.png"

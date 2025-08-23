@@ -55,6 +55,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     if (!data) return null;
 
     const totalTokensNum: number = typeof data.totalTokens === 'number' ? data.totalTokens : parseInt(String(data.totalTokens ?? 0), 10) || 0;
+    const tokensOnSaleNum: number = typeof data.tokensOnSale === 'number' ? data.tokensOnSale : parseInt(String(data.tokensOnSale ?? data.totalTokens ?? 0), 10) || 0;
     const ceilingMarketCapNum: number = typeof data.ceilingMarketCap === 'number' ? data.ceilingMarketCap : parseFloat(String(data.ceilingMarketCap ?? 0)) || 0;
     const currentMarketCapNum: number = typeof data.currentMarketCap === 'number' ? data.currentMarketCap : 0;
     const refundedBTCNum: number = typeof data.refundedBTC === 'number' ? data.refundedBTC : 0;
@@ -106,6 +107,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       id: typeof data.id === 'string' ? data.id : undefined,
       config: {
         totalTokens: String(totalTokensNum),
+        tokensOnSale: String(tokensOnSaleNum),
         ceilingMarketCapUSD: String(ceilingMarketCapNum),
         minPledgeBTC: String(data.minPledge ?? '0.001'),
         maxPledgeBTC: String(data.maxPledge ?? '0.5'),

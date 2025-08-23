@@ -143,7 +143,16 @@ const AuctionStatus: React.FC = () => {
       <div className="border-t border-primary-500/20 pt-6">
         <h3 className="text-lg font-semibold mb-4 text-white">Auction Details</h3>
         <div className="grid grid-cols-2 gap-4 text-sm">
-          <div className="text-gray-400">Total Tokens for Sale</div>
+          <div className="text-gray-400">Tokens On Sale</div>
+          <div className="font-medium text-right text-gray-200">
+            {(() => {
+              const ts = auctionState.config?.tokensOnSale ?? auctionState.config?.totalTokens;
+              const n = ts ? Number(ts) : 0;
+              return Number.isFinite(n) ? n.toLocaleString() : '0';
+            })()}
+          </div>
+
+          <div className="text-gray-400">Total Supply</div>
           <div className="font-medium text-right text-gray-200">{auctionState.config?.totalTokens ? Number(auctionState.config.totalTokens).toLocaleString() : '0'}</div>
           
           <div className="text-gray-400">Ceiling Market Cap</div>

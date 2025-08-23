@@ -27,6 +27,20 @@ export class PledgeQueueService {
   }
 
   /**
+   * Clear all pledge queue data (testing utility)
+   */
+  public async clearAll(): Promise<void> {
+    try {
+      await redisClient.del(this.QUEUE_KEY);
+      await redisClient.del(this.PROCESSED_SET_KEY);
+      // Broadcast queue update to reflect empty state
+      await this.broadcastQueueUpdate();
+    } catch (error) {
+      console.error('Error clearing pledge queue state:', error);
+    }
+  }
+
+  /**
    * Add a pledge to the queue with timestamp
    */
   public async enqueuePledge(pledge: QueuedPledge): Promise<boolean> {

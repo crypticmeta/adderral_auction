@@ -233,6 +233,7 @@ export const sendAuctionStatus = async (socket: any) => {
       startTime: auction.startTime,
       endTime: auction.endTime,
       totalTokens: auction.totalTokens,
+      tokensOnSale: Number(((auction as any)?.tokensOnSale ?? auction.totalTokens) || 0),
       ceilingMarketCap: auction.ceilingMarketCap,
       currentMarketCap,
       // convert sats -> BTC for client display

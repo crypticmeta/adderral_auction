@@ -46,6 +46,14 @@ A new background task now verifies pledge txids against mempool.space and marks 
 # Adderrels Auction Platform
 
 ## Recent Updates
+**Tokens On Sale integration (frontend + WS)**
+  - Backend `auction_status` payload includes `tokensOnSale` (fallbacks to `totalTokens` when missing).
+  - Frontend maps it in `frontend/src/contexts/WebSocketContext.tsx` → `AuctionState.config.tokensOnSale` with null-safe parsing.
+  - UI displays it:
+    - `frontend/src/components/auction-stats.tsx`: shows "Tokens On Sale" as the primary token stat with a subtle "Total Supply" line.
+    - `frontend/src/components/AuctionStatus.tsx`: adds "Tokens On Sale" and a separate "Total Supply" in Auction Details.
+    - `frontend/src/app/page.tsx`: hero text and `AuctionStats` now use `tokensOnSale` when present.
+
 - **Network enforcement & address validation**
   - Auctions and pledges are hard-scoped to the configured Bitcoin network (`mainnet` or `testnet`).
   - Backend maps env `BTC_NETWORK` → Prisma enum `BtcNetwork` and persists it on `Auction`/`Pledge`.
@@ -391,6 +399,15 @@ Notes:
 
 To enable the WebSocket Debug Window, set `NEXT_PUBLIC_APP_ENV` to `development` in your `.env.local` file. This will automatically enable the debug window. The debug window will appear as a floating panel on the right side of the screen, showing inbound and outbound WebSocket events. You can copy all logs or clear them for quick debugging.
 
+Additional controls exposed in the Debug Window:
+
+- **Dev network switcher**: Switch between `mainnet` and `testnet` locally (dev-only; persists to `localStorage['btc-network']`).
+- **DB reseed button**: Triggers `POST /api/auction/reseed?mode=...` with `test`/`prod` modes (dev-only). See Reset DB Button section.
+- **Testing API buttons**: Visible only when `NEXT_PUBLIC_TESTING=true`.
+  - `Reset pledges` → `POST /api/testing/reset-pledges`
+  - `Seed random` → `POST /api/testing/seed-random` with optional params: `users`, `pledges`, `targetPercent`, `process`
+  - These require backend `TESTING=true` and frontend `NEXT_PUBLIC_TESTING=true`.
+
 ## Frontend Testing Mode
 
 - Enable by setting `NEXT_PUBLIC_TESTING=true` in `frontend/.env.local` (see `frontend/.env.local.example`).
@@ -451,6 +468,36 @@ Refund mechanism:
 - `GET /api/status` - Backend runtime status used by the frontend env guard.
   - Response: `{ network: 'mainnet' | 'testnet', testing: boolean, nodeEnv: string }`
 
+### Testing (gated by TESTING=true)
+- Enable by setting `TESTING=true` in `backend/.env`. Endpoints are mounted only when `config.testing` is true. Do NOT enable in production.
+
+- `POST /api/testing/reset-pledges`
+  - Deletes all `Pledge` and `RefundedPledge` rows for the active auction, resets `Auction.totalBTCPledged` and `Auction.refundedBTC` to 0, and clears the Redis pledge queue.
+  - Example:
+    ```bash
+    curl -s -X POST http://localhost:5000/api/testing/reset-pledges | jq
+    ```
+
+- `POST /api/testing/seed-random`
+  - Seeds random Users and Pledges for the active auction and enqueues all pledges. Optionally processes the queue to update totals/refunds. Uses live BTC price to target a percent of the auction ceiling (USD → BTC).
+  - Body (all optional):
+    ```json
+    {
+      "users": 10,            // number of users to create (1–200)
+      "pledges": 25,          // number of pledges to create (1–1000)
+      "targetPercent": 80,    // target % of ceiling (0–110)
+      "process": true         // process queue after seeding
+    }
+    ```
+  - Example:
+    ```bash
+    curl -s -X POST \
+      -H 'Content-Type: application/json' \
+      -d '{"users":12,"pledges":40,"targetPercent":95,"process":true}' \
+      http://localhost:5000/api/testing/seed-random | jq
+    ```
+  - Response includes: `usersCreated`, `pledgesCreated`, `pledgesProcessed`, `pledgesRefunded`, `finalTotalBTCPledged`, `targetPercent`, `auctionId`.
+
 ## WebSocket Messages
 
 ### Client to Server
@@ -497,6 +544,7 @@ Refund mechanism:
 - `ResetDbButton.tsx` adds an AbortController with a 15s timeout for `/api/auction/reseed` to avoid hanging requests and shows a friendly timeout error.
 - It now supports selecting reseed mode `test` or `prod` and calls `/api/auction/reseed?mode=...` accordingly.
 - Prod mode seeds a production-style auction starting at 29 Aug 13:00 UTC (72h), no test users/pledges.
+- The button is available inside the Debug Window (dev-only).
 
 Example internals:
 ```javascript

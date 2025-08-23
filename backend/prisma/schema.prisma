@@ -61,6 +61,7 @@ model Pledge {
 model Auction {
   id              String          @id @default(uuid())
   totalTokens     Float
+  tokensOnSale    Float
   ceilingMarketCap Float           // Ceiling market cap in USD
   totalBTCPledged Float           @default(0)
   refundedBTC     Float           @default(0)  // Track refunded BTC amounts

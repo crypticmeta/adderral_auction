@@ -7,9 +7,11 @@ import { WebSocketProvider } from "@/contexts/WebSocketContext";
 import WalletProvider from "@/contexts/WalletProvider";
 import DebugWindow from "@/components/DebugWindow";
 import { NetworkProvider } from "@/contexts/NetworkContext";
+import { env } from "@/config/env";
 
 const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isDev = (process.env.NEXT_PUBLIC_APP_ENV ?? process.env.NODE_ENV) !== "production";
+  const showDebug = isDev || !!env.testing;
 
   return (
     <NetworkProvider>
@@ -24,7 +26,7 @@ const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => 
             {children}
           </WalletProvider>
         </WebSocketProvider>
-        {isDev ? <DebugWindow /> : null}
+        {showDebug ? <DebugWindow /> : null}
       </DebugLogProvider>
     </NetworkProvider>
   );
