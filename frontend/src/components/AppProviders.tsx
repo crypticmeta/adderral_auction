@@ -19,7 +19,6 @@ const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         <WebSocketProvider>
           <WalletProvider
             customAuthOptions={{
-              network: 'mainnet',
               appDetails: { name: 'Adderrels Auction', icon: '/adderrel.png' },
             }}
           >

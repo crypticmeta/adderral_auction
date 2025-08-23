@@ -233,8 +233,8 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
             No pledges in the queue yet
           </div>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-gray-700">
-            <table className="min-w-full divide-y divide-gray-700">
+          <div className="overflow-x-auto rounded-lg border border-gray-700 scrollbar-thin scrollbar-thumb-gray-700/70 scrollbar-track-transparent">
+            <table className="min-w-[720px] w-full divide-y divide-gray-700">
               <thead className="bg-dark-900/50">
                 <tr>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">User</th>
@@ -299,8 +299,13 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
                 totalPledgedBTC includes processed + pending pledges. Table shows only pending pledges.
               </div>
             )}
-            <div className="px-4 py-2 text-[11px] text-gray-400 border-t border-gray-700 bg-dark-900/40">
-              Note: Expected allocation is an approximation based on total tokens and total pledged (processed + pending) and may change as pledges are processed.
+            <div className="px-4 py-2 text-[11px] text-gray-400 border-t border-gray-700 bg-dark-900/40 space-y-1">
+              <div>
+                Note: Expected allocation is an approximation based on total tokens and total pledged (processed + pending) and may change as pledges are processed.
+              </div>
+              <div>
+                Position shows a pledge's place in the processing queue (1 = next to process). It updates live as the queue changes.
+              </div>
             </div>
           </div>
         )}

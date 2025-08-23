@@ -31,7 +31,7 @@ const DebugWindow: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const isTesting = !!env.testing;
   const isDev = (process.env.NEXT_PUBLIC_APP_ENV ?? process.env.NODE_ENV) !== "production";
-  const { network, setNetwork } = useBtcNetwork();
+  const { network } = useBtcNetwork();
 
   // Testing controls state
   const [pending, setPending] = useState(false);
@@ -123,22 +123,6 @@ const DebugWindow: React.FC = () => {
         </div>
         {(isDev || isTesting) && (
           <div className="px-3 py-2 bg-neutral-900/70 border-b border-neutral-800 space-y-2">
-            {/* Dev network switcher */}
-            {isDev && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-neutral-400">Network</span>
-                <select
-                  className="text-xs bg-neutral-800/60 border border-neutral-700 rounded px-2 py-1 text-neutral-200"
-                  value={network}
-                  onChange={(e) => setNetwork((e.target.value as any) || 'mainnet')}
-                >
-                  <option value="mainnet">mainnet</option>
-                  <option value="testnet">testnet</option>
-                </select>
-                <span className="text-[10px] text-neutral-500">(dev only)</span>
-              </div>
-            )}
-
             {/* Reseed DB (dev helper) */}
             {isDev && (
               <div className="flex items-center gap-2">

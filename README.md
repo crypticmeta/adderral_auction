@@ -401,12 +401,20 @@ To enable the WebSocket Debug Window, set `NEXT_PUBLIC_APP_ENV` to `development`
 
 Additional controls exposed in the Debug Window:
 
-- **Dev network switcher**: Switch between `mainnet` and `testnet` locally (dev-only; persists to `localStorage['btc-network']`).
 - **DB reseed button**: Triggers `POST /api/auction/reseed?mode=...` with `test`/`prod` modes (dev-only). See Reset DB Button section.
 - **Testing API buttons**: Visible only when `NEXT_PUBLIC_TESTING=true`.
   - `Reset pledges` → `POST /api/testing/reset-pledges`
   - `Seed random` → `POST /api/testing/seed-random` with optional params: `users`, `pledges`, `targetPercent`, `process`
+    - To simulate real users joining over time, you can add stagger parameters:
+      - `staggerMinMs` (default 50)
+      - `staggerMaxMs` (default 400)
+    - Each pledge creation sleeps a random time in `[staggerMinMs, staggerMaxMs]` before enqueueing.
   - These require backend `TESTING=true` and frontend `NEXT_PUBLIC_TESTING=true`.
+
+Network selection:
+
+- Frontend auto-syncs to the backend network reported by `GET /status` (`mainnet` or `testnet`).
+- There is no client-side network switcher. To change networks, set `BTC_NETWORK` in the backend env and restart the server.
 
 ## Frontend Testing Mode
 

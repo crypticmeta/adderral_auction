@@ -54,6 +54,10 @@ router.post('/seed-random', requireTestingEnabled, async (req: Request, res: Res
     const pledgesCount = Math.max(1, Math.min(1000, Number(req.body?.pledges ?? 25)));
     const processAfter = (req.body?.process ?? true) === true;
     const targetPercent = Math.max(0, Math.min(110, Number(req.body?.targetPercent ?? (Math.random() * 110))));
+    // Optional staggered delays to simulate real users creating pledges over time
+    const staggerMinMs = Math.max(0, Math.min(10000, Number(req.body?.staggerMinMs ?? 50)));
+    const staggerMaxMs = Math.max(staggerMinMs, Math.min(20000, Number(req.body?.staggerMaxMs ?? 400)));
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
     // Ensure BTC price available to translate USD ceiling -> BTC
     const btcPrice = await bitcoinPriceService.getBitcoinPrice();
@@ -103,6 +107,11 @@ router.post('/seed-random', requireTestingEnabled, async (req: Request, res: Res
     // Create pledges and enqueue
     let created = 0;
     for (let i = 0; i < amounts.length; i++) {
+      // Random break before creating each pledge to mimic human activity
+      const jitter = Math.floor(staggerMinMs + Math.random() * (staggerMaxMs - staggerMinMs));
+      if (jitter > 0) {
+        await sleep(jitter);
+      }
       const sats = Math.max(1, Math.round(amounts[i] * 1e8));
       const userId = userIds[Math.floor(Math.random() * userIds.length)];
       const txid = Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
@@ -136,7 +145,7 @@ router.post('/seed-random', requireTestingEnabled, async (req: Request, res: Res
         timestamp: pledge.timestamp.toISOString(),
         sender: pledge.cardinal_address || '',
         depositAddress: pledge.depositAddress || '',
-        signature: ""
+        signature: pledge.signature // string | null as per shared types
       });
 
       created += 1;
