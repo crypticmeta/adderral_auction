@@ -2380,10 +2380,10 @@ bitcoin-address-validation@2.2.3:
     bech32 "^2.0.0"
     sha256-uint8array "^0.10.3"
 
-bitcoin-wallet-adapter@^1.11.0:
-  version "1.11.0"
-  resolved "https://registry.yarnpkg.com/bitcoin-wallet-adapter/-/bitcoin-wallet-adapter-1.11.0.tgz#9bb3751a0cca2d83f5eecedb8343772c5321d8af"
-  integrity sha512-vN+2Qmda258Z0V53iiJigSiRv0L7b6Nr4Qw6D2FfwOht21jzc+8YpjRB2YE+kzVipFP/LBYV0oapSYmeGJfNgw==
+bitcoin-wallet-adapter@^1.12.0:
+  version "1.12.0"
+  resolved "https://registry.yarnpkg.com/bitcoin-wallet-adapter/-/bitcoin-wallet-adapter-1.12.0.tgz#3319bd3b3a3fc0708703ff0839f4f78600a4b9b4"
+  integrity sha512-bUbkPYGka4F3wZ+Po9mTm7UVz5lOGX6ZQpH4onycXq6krRPeuX1nqoz6F5ndXglgMj3vGgEISeR9dsWn7k47VQ==
   dependencies:
     "@emotion/react" "^11.11.3"
     "@emotion/styled" "^11.11.0"

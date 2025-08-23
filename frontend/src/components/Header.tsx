@@ -14,8 +14,10 @@ import { useEffect, useState } from 'react';
 import ResetDbButton from './ResetDbButton';
 import type { WalletDetails } from '@shared/types/common';
 import { env } from '../config/env';
+import { useBtcNetwork } from '@/contexts/NetworkContext';
 
 export default function Header() {
+  const { network } = useBtcNetwork();
   const isTesting = env.testing;
   const [testConnected, setTestConnected] = useState(false);
   const apiUrl = env.apiUrl;
@@ -167,7 +169,7 @@ export default function Header() {
               Adderrels Auction
             </span>
             <span className="hidden sm:inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] text-white/80">
-              {env.btcNetwork}
+              {network}
               {env.testing ? <span className="ml-1 text-yellow-300">TEST</span> : null}
             </span>
           </Link>
@@ -210,7 +212,6 @@ export default function Header() {
             {!isTesting ? (
               <ConnectMultiButton
                 icon="/adderrel.png"
-                network={env.btcNetwork}
                 connectionMessage="Connect your wallet to participate in the auction."
               // buttonClassname="bg-adderrels-500 text-white hover:bg-adderrels-500/90 transition-colors rounded-md px-3 py-2 text-sm font-medium"
               // supportedWallets={["Unisat", "Xverse", "Leather", "Okx", "Magiceden"]}

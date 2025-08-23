@@ -24,7 +24,7 @@
     "@tanstack/react-query": "^5.85.3",
     "@types/react-redux": "^7.1.34",
     "axios": "^1.11.0",
-    "bitcoin-wallet-adapter": "^1.11.0",
+    "bitcoin-wallet-adapter": "^1.12.0",
     "next": "15.4.6",
     "next-transpile-modules": "^10.0.1",
     "react": "19.1.0",

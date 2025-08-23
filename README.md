@@ -488,6 +488,11 @@ Refund mechanism:
   - Frontend `NEXT_PUBLIC_TESTING` != backend `TESTING`.
 - Update envs to resolve and refresh the app.
 
+- **Network context (frontend)**
+  - File: `frontend/src/contexts/NetworkContext.tsx`; wired in `frontend/src/components/AppProviders.tsx`.
+  - Default network comes from `NEXT_PUBLIC_BTC_NETWORK`. In development only, you can override via `localStorage.setItem('btc-network', 'mainnet' | 'testnet')`. This override is ignored in production builds.
+  - Use `useBtcNetwork()` to access `{ network, setNetwork, isDev }`. Components like `Header` and the wallet connect button consume this to stay in sync.
+
 ### Reset DB Button (Dev-only)
 - `ResetDbButton.tsx` adds an AbortController with a 15s timeout for `/api/auction/reseed` to avoid hanging requests and shows a friendly timeout error.
 - It now supports selecting reseed mode `test` or `prod` and calls `/api/auction/reseed?mode=...` accordingly.

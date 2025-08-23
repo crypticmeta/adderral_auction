@@ -3,6 +3,7 @@
 
 import React, { ReactNode } from 'react';
 import { WalletProvider as BitcoinWalletProvider } from 'bitcoin-wallet-adapter';
+import { useBtcNetwork } from '@/contexts/NetworkContext';
 
 interface WalletProviderProps {
   children: ReactNode;
@@ -17,23 +18,17 @@ interface WalletProviderProps {
 }
 
 export const WalletProvider: React.FC<WalletProviderProps> = ({ children, customAuthOptions }) => {
-  // Defaults with existing icon path; allow overrides via props
-  const defaults = {
-    network: 'mainnet' as const,
+  const { network } = useBtcNetwork();
+
+  // Merge app details, but always take network from context
+  const merged = {
+    network,
     appDetails: {
       name: "Adderrels Auction",
       icon: "/adderrel.png",
-    },
-  } as const;
-
-  const merged = {
-    ...defaults,
-    ...(customAuthOptions || {}),
-    appDetails: {
-      ...defaults.appDetails,
       ...(customAuthOptions?.appDetails || {}),
     },
-  } satisfies {
+  } as {
     network: 'mainnet' | 'testnet';
     appDetails: { name: string; icon: string };
   };
