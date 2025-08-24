@@ -10,9 +10,10 @@ import { NetworkProvider } from "@/contexts/NetworkContext";
 import { env } from "@/config/env";
 
 const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const isDev = (process.env.NEXT_PUBLIC_APP_ENV ?? process.env.NODE_ENV) !== "production";
-  // TEMP: Show debug window in production as well
-  const showDebug = true;
+  const isProdEnv = (env.appEnv ?? '').toLowerCase() === 'production' || process.env.NODE_ENV === 'production';
+  const isDev = !isProdEnv;
+  // Debug window: dev-only unless NEXT_PUBLIC_TESTING=true
+  const showDebug = isDev || !!env.testing;
 
   return (
     <NetworkProvider>

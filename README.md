@@ -165,11 +165,11 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - When price cannot be fetched, backend marks `priceError: true` in `auction_status` and sets `currentPrice`-dependent values conservatively.
   - Frontend disables pledge UI and shows a banner until price recovers.
   - Automated Jest tests added for caching/TTL, scheduler cadence, and WS `priceError` emission.
-- **WebSocket Debug Window (Temporarily enabled in production)**
+- **WebSocket Debug Window (Dev-only)**
   - Floating Tailwind panel showing inbound/outbound WS events
   - Copy-all and clear actions for quick debugging
-  - Currently forced on in all environments (see `frontend/src/components/AppProviders.tsx` → `showDebug = true`).
-  - Testing-only controls still require `NEXT_PUBLIC_TESTING=true` (frontend) and `TESTING=true` (backend).
+  - Enabled automatically when `NEXT_PUBLIC_APP_ENV!=production`.
+  - Testing-only controls additionally require `NEXT_PUBLIC_TESTING=true` (frontend) and `TESTING=true` (backend).
   - Files: `frontend/src/contexts/DebugLogContext.tsx`, `frontend/src/components/DebugWindow.tsx`, `frontend/src/components/AppProviders.tsx`
 - **Homepage Visual Refresh**
   - Richer multi-layer gradients and overlays for depth
@@ -398,9 +398,7 @@ Notes:
 
 ## WebSocket Debug Window
 
-The WebSocket Debug Window is currently visible in all environments (production included) as a temporary measure. See `frontend/src/components/AppProviders.tsx` where `showDebug` is set to `true`.
-
-Previously, it was enabled only when `NEXT_PUBLIC_APP_ENV!=production`. If you need to restore that behavior, change `showDebug` back to `isDev || !!env.testing` in `AppProviders.tsx`.
+By default the WebSocket Debug Window is shown in non-production builds and when testing flags are enabled. See `frontend/src/components/AppProviders.tsx` where `showDebug = isDev || !!env.testing`.
 
 Additional controls exposed in the Debug Window:
 
