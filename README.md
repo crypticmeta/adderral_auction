@@ -390,6 +390,7 @@ Notes:
   - File: `frontend/src/config/env.ts`
   - Import via `import { env } from '@/config/env'` or relative from components.
   - Exposes: `apiUrl`, `wsUrl`, `appEnv`, `testing`, `btcNetwork`.
+  - CI builds bake four public envs into the image: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_TESTING`, `NEXT_PUBLIC_BTC_NETWORK` (see `.github/workflows/build-push-frontend.yml`).
 
 5. Start the development server:
    ```bash
