@@ -11,7 +11,8 @@ import { env } from "@/config/env";
 
 const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isDev = (process.env.NEXT_PUBLIC_APP_ENV ?? process.env.NODE_ENV) !== "production";
-  const showDebug = isDev || !!env.testing;
+  // TEMP: Show debug window in production as well
+  const showDebug = true;
 
   return (
     <NetworkProvider>

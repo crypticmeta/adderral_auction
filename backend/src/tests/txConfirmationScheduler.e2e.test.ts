@@ -45,6 +45,7 @@ describe('Tx Confirmation Scheduler (real mempool check)', () => {
     return prisma.auction.create({
       data: {
         totalTokens: 1_000_000,
+        tokensOnSale: 1_000_000,
         ceilingMarketCap: 50_000_000,
         startTime: now,
         endTime: end,
