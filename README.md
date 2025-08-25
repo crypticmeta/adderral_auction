@@ -51,6 +51,13 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Backend `auction_status` computes `currentMarketCap` from processed BTC (`totalBTCPledged`) plus pending queued BTC for the active auction.
   - New field `pendingBTCPledged` (BTC) is included in the WS payload for transparency.
   - Frontend `PledgeQueue` listens to both `pledge_created` and `pledge:created` (and verified/processed variants) to refresh promptly across clients.
+**Your Pledges identity + live refresh**
+  - `frontend/src/components/YourPledges.tsx` now fetches by connected wallet cardinal address when available, falling back to `guestId`.
+  - Auto-refreshes on websocket pledge events: `pledge_created`, `pledge:created`, `pledge_verified`, `pledge:processed`, `pledge:queue:update`, `pledge:queue:position`.
+  - Corrected API path to match backend: `GET /api/pledges/auction/:auctionId/cardinal/:cardinalAddress`.
+**Sticky Market Cap/Price during transient price errors**
+  - `frontend/src/contexts/WebSocketContext.tsx` preserves last non-zero `currentMarketCap`, `currentPrice`, and `progressPercentage` when `auction_status` reports `priceError` or zeros.
+  - Prevents the UI from flashing/resetting to zero during upstream price fetch hiccups.
 **UI tooltips for formulas**
   - Current Market Cap cards show a tooltip explaining: `(Processed BTC + Queued BTC) × BTC/USD`.
   - Allocation estimates show a tooltip: `Estimated tokens ≈ (Pledge BTC × BTC/USD) ÷ Current Token Price`.

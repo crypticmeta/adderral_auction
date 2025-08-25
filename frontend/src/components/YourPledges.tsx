@@ -1,8 +1,10 @@
 // YourPledges component lists pledges made by the current user for the active auction
 // Component: YourPledges
 // Fetches user-scoped pledges and renders status/position with null-safety.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { PledgeItem } from '@shared/types/common';
+import { useWalletAddress } from 'bitcoin-wallet-adapter';
+import { useWebSocket as useWSContext } from '@/contexts/WebSocketContext';
 
 interface YourPledgesProps {
   auctionId: string;
@@ -12,30 +14,80 @@ const YourPledges: React.FC<YourPledgesProps> = ({ auctionId }) => {
   const [userPledges, setUserPledges] = useState<PledgeItem[]>([]);
   const [error, setError] = useState<string>('');
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  const wallet = useWalletAddress();
+  const { socket, isAuthenticated } = useWSContext();
+  const mountedRef = useRef(true);
 
-  useEffect(() => {
-    const fetchUserPledges = async () => {
-      try {
-        if (!auctionId) return;
-        const token = (typeof window !== 'undefined') ? localStorage.getItem('guestToken') : null;
-        const userId = (typeof window !== 'undefined') ? localStorage.getItem('userId') : null;
-        if (!token || !userId) { setUserPledges([]); return; }
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
-        const res = await fetch(`${apiUrl}/api/pledges/user/${userId}/auction/${auctionId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!res.ok) {
-          throw new Error(`Failed to fetch user pledges (${res.status})`);
-        }
-        const data = await res.json();
-        setUserPledges(Array.isArray(data) ? data : []);
-      } catch (e: any) {
-        setError(e?.message || 'Failed to fetch your pledges');
+  const cardinalAddr = useMemo(() => {
+    const w = wallet?.cardinal_address || '';
+    return typeof w === 'string' && w.length > 0 ? w : '';
+  }, [wallet?.cardinal_address]);
+
+  const getGuestId = () => {
+    try { return (typeof window !== 'undefined') ? (localStorage.getItem('guestId') || '') : ''; } catch { return ''; }
+  };
+
+  const fetchByUserId = async (userId: string) => {
+    const res = await fetch(`${apiUrl}/api/pledges/user/${encodeURIComponent(userId)}/auction/${encodeURIComponent(auctionId)}`);
+    if (!res.ok) throw new Error(`Failed to fetch user pledges (${res.status})`);
+    const data = await res.json();
+    return Array.isArray(data) ? data as PledgeItem[] : [] as PledgeItem[];
+  };
+
+  const fetchByCardinal = async (addr: string) => {
+    const res = await fetch(`${apiUrl}/api/pledges/auction/${encodeURIComponent(auctionId)}/cardinal/${encodeURIComponent(addr)}`);
+    if (!res.ok) throw new Error(`Failed to fetch pledges for address (${res.status})`);
+    const data = await res.json();
+    return Array.isArray(data) ? data as PledgeItem[] : [] as PledgeItem[];
+  };
+
+  const refresh = async () => {
+    try {
+      if (!auctionId) return;
+      const gid = getGuestId();
+      let pledges: PledgeItem[] = [];
+      if (cardinalAddr) {
+        pledges = await fetchByCardinal(cardinalAddr);
+      } else if (gid) {
+        pledges = await fetchByUserId(gid);
+      } else {
+        pledges = [];
       }
-    };
+      if (mountedRef.current) setUserPledges(pledges);
+      if (mountedRef.current) setError('');
+    } catch (e: any) {
+      if (mountedRef.current) setError(e?.message || 'Failed to fetch your pledges');
+    }
+  };
 
-    fetchUserPledges();
-  }, [auctionId, apiUrl]);
+  useEffect(() => { refresh(); }, [auctionId, apiUrl, cardinalAddr]);
+
+  // Auto-refresh when pledge-related websocket events arrive
+  useEffect(() => {
+    if (!socket || !isAuthenticated) return;
+    const debounced = (() => {
+      let t: any; return () => { if (t) clearTimeout(t); t = setTimeout(() => { refresh(); }, 250); };
+    })();
+    const onAnyCreate = (_d: any) => debounced();
+    const onProcessed = (_d: any) => debounced();
+    const onQueue = (_d: any) => debounced();
+    socket.on('pledge:created', onAnyCreate);
+    socket.on('pledge_created', onAnyCreate);
+    socket.on('pledge:processed', onProcessed);
+    socket.on('pledge_verified', onProcessed);
+    socket.on('pledge:queue:update', onQueue);
+    socket.on('pledge:queue:position', onQueue);
+    return () => {
+      socket.off('pledge:created', onAnyCreate);
+      socket.off('pledge_created', onAnyCreate);
+      socket.off('pledge:processed', onProcessed);
+      socket.off('pledge_verified', onProcessed);
+      socket.off('pledge:queue:update', onQueue);
+      socket.off('pledge:queue:position', onQueue);
+    };
+  }, [socket, isAuthenticated, auctionId, apiUrl, cardinalAddr]);
 
   return (
     <div className="bg-gradient-to-br from-dark-800/50 to-dark-700/50 backdrop-blur-md border border-primary-500/30 rounded-xl p-6 transition-all hover:border-primary-500/60 hover:shadow-glow-md">
@@ -59,7 +111,7 @@ const YourPledges: React.FC<YourPledgesProps> = ({ auctionId }) => {
               >
                 <div className="flex justify-between items-center">
                   <div>
-                    <span className="font-semibold">{((pledge?.satsAmount ?? 0) / 1e8).toFixed(8)} BTC</span>
+                    <span className="font-semibold">{(((pledge?.satsAmount ?? 0) / 1e8) || 0).toFixed(8)} BTC</span>
                     <div className="text-xs mt-1">
                       {pledge?.processed ? (
                         <span className="flex items-center">
@@ -81,7 +133,7 @@ const YourPledges: React.FC<YourPledgesProps> = ({ auctionId }) => {
                   {!pledge?.processed && (
                     <div className="text-right">
                       <div className="text-xs text-gray-400">Position</div>
-                      <div className="font-bold">{pledge?.queuePosition ?? '—'}</div>
+                      <div className="font-bold">{typeof pledge?.queuePosition === 'number' ? pledge.queuePosition : '—'}</div>
                     </div>
                   )}
                 </div>

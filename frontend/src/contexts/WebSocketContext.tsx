@@ -218,7 +218,26 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
 
       newSocket.on('auction_status', (data) => {
         debug?.addEntry('in', 'auction_status', data);
-        setAuctionState(transformToAuctionState(data));
+        const next = transformToAuctionState(data);
+        setAuctionState((prev) => {
+          if (!next) return next;
+          if (!prev) return next;
+          const shouldKeepPrev = Boolean(next.priceError || (Number(next.currentMarketCap || 0) === 0));
+          if (shouldKeepPrev) {
+            const merged = { ...next } as AuctionState;
+            if (prev.currentMarketCap && prev.currentMarketCap > 0) merged.currentMarketCap = prev.currentMarketCap;
+            if (prev.currentPrice && prev.currentPrice > 0) merged.currentPrice = prev.currentPrice;
+            if (prev.progressPercentage && prev.progressPercentage > 0) merged.progressPercentage = prev.progressPercentage;
+            // keep ceilingReached consistent with preserved cap
+            if (typeof merged.ceilingMarketCap === 'number' && merged.ceilingMarketCap > 0) {
+              const p = Math.min(100, Math.max(0, (merged.currentMarketCap / merged.ceilingMarketCap) * 100));
+              if (p > merged.progressPercentage) merged.progressPercentage = p;
+              merged.ceilingReached = p >= 100 || merged.ceilingReached;
+            }
+            return merged;
+          }
+          return next;
+        });
       });
 
       // Debounced requester to avoid flooding server on rapid events
