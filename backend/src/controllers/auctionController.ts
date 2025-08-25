@@ -22,6 +22,108 @@ export const setSocketServer = (socketServer: Server) => {
   io = socketServer;
 };
 
+// Get current auction status for network; falls back to latest ended auction
+export const getCurrentAuctionStatus = async (req: Request, res: Response) => {
+  try {
+    const qpNet = (req?.query?.network as string | undefined) || null;
+    const toNet = (n: string | null | undefined): BtcNetwork => (String(n).toLowerCase() === 'testnet' ? 'TESTNET' : 'MAINNET');
+    const targetNet = toNet(qpNet ?? config.btcNetwork);
+
+    // Try active first
+    let auction = await prisma.auction.findFirst({
+      where: { isActive: true, network: targetNet },
+      orderBy: { startTime: 'desc' },
+      include: {
+        pledges: {
+          include: { user: true }
+        }
+      }
+    });
+
+    // Fallback to latest auction for this network
+    if (!auction) {
+      auction = await prisma.auction.findFirst({
+        where: { network: targetNet },
+        orderBy: { startTime: 'desc' },
+        include: {
+          pledges: {
+            include: { user: true }
+          }
+        }
+      });
+    }
+
+    if (!auction) {
+      return res.status(404).json({ message: `No auction found for ${targetNet}` });
+    }
+
+    // Time and completion check
+    const now = new Date();
+    const endTimeMs = auction?.endTime ? new Date(auction.endTime).getTime() : 0;
+    const remainingTime = Math.max(0, endTimeMs - now.getTime());
+    if (auction.isActive && remainingTime <= 0) {
+      await prisma.auction.update({ where: { id: auction.id }, data: { isActive: false, isCompleted: true } });
+      auction.isActive = false;
+      auction.isCompleted = true;
+    }
+
+    // Price + derived fields
+    let btcPrice: number | null = null;
+    let priceError = false;
+    try {
+      btcPrice = await bitcoinPriceService.getBitcoinPrice();
+      if (!(btcPrice > 0)) throw new Error('Invalid BTC price');
+    } catch (e) {
+      console.error('BTC price unavailable:', e);
+      priceError = true;
+      btcPrice = null;
+    }
+
+    const pledgedBtc = Number(auction?.totalBTCPledged ?? 0);
+    const totalTokens = Number(auction?.totalTokens ?? 0);
+    const currentMarketCap = btcPrice ? pledgedBtc * btcPrice : 0;
+    const currentPrice = btcPrice && totalTokens > 0 ? currentMarketCap / totalTokens : 0;
+    const ceilingReached = typeof auction.ceilingMarketCap === 'number'
+      ? currentMarketCap >= auction.ceilingMarketCap
+      : false;
+
+    const payload = {
+      id: auction.id,
+      isActive: auction.isActive,
+      isCompleted: auction.isCompleted,
+      totalBTCPledged: pledgedBtc,
+      refundedBTC: Number(auction?.refundedBTC ?? 0),
+      remainingTime, // ms
+      serverTime: now.getTime(), // ms
+      startTime: auction.startTime,
+      endTime: auction.endTime,
+      totalTokens: totalTokens,
+      tokensOnSale: Number(((auction as any)?.tokensOnSale ?? totalTokens) || 0),
+      ceilingMarketCap: Number(auction?.ceilingMarketCap ?? 0),
+      currentMarketCap,
+      minPledge: Number(((auction as any)?.minPledgeSats ?? 0)) / 1e8,
+      maxPledge: Number(((auction as any)?.maxPledgeSats ?? 0)) / 1e8,
+      ceilingReached,
+      currentPrice,
+      priceError,
+      pledges: (auction.pledges ?? []).map((pledge: any) => ({
+        id: pledge.id,
+        userId: pledge.userId,
+        cardinal_address: pledge.user?.cardinal_address ?? null,
+        ordinal_address: pledge.user?.ordinal_address ?? null,
+        btcAmount: Number(pledge?.satAmount ?? 0) / 1e8,
+        timestamp: pledge.timestamp,
+        verified: Boolean(pledge?.verified ?? false),
+      })),
+    };
+
+    return res.status(200).json(payload);
+  } catch (error) {
+    console.error('Get current auction status error:', error);
+    return res.status(500).json({ message: 'Server error retrieving current auction status' });
+  }
+};
+
 // Helper: map env network to Prisma enum
 const toEnumNetwork = (n: string | null | undefined): BtcNetwork =>
   (String(n).toLowerCase() === 'testnet' ? 'TESTNET' : 'MAINNET');

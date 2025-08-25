@@ -57,11 +57,11 @@ A new background task now verifies pledge txids against mempool.space and marks 
 - **Network enforcement & address validation**
   - Auctions and pledges are hard-scoped to the configured Bitcoin network (`mainnet` or `testnet`).
   - Backend maps env `BTC_NETWORK` → Prisma enum `BtcNetwork` and persists it on `Auction`/`Pledge`.
-  - `GET /api/auction/status` and `websocket/socketHandler.ts#sendAuctionStatus` only expose auctions for the current network. If none exist: server returns a clear "No active auction for <network>" message and the frontend shows a no-auction notice.
+  - `GET /api/auction/status` and `websocket/socketHandler.ts#sendAuctionStatus` expose auctions for the requested/current network. If no active auction exists, they now fall back to the most recent auction on that network (ended/completed) so the frontend can display final stats instead of an error.
   - `POST /api/pledges` enforces that any provided `walletDetails.network` and `depositAddress` match the auction’s network. Client-provided deposit addresses are validated by prefix (`bc1`/`1`/`3` for mainnet; `tb1`/`m`/`n`/`2` for testnet).
   - `GET /api/pledges/deposit-address` validates `BTC_DEPOSIT_ADDRESS` format against the configured network before returning it.
   - `POST /api/auction` and dev reseed set `Auction.network` from env automatically; `GET /api/auction` defaults to filtering by env network, with `?network=` override.
-  - Frontend Home reacts to the WS error and renders a concise no-auction message when the selected network has no active auction.
+  - Frontend Home displays the ended auction stats when no active auction exists (no error banner).
 - **API change: Wallet connect**
   - Removed single-wallet endpoint `POST /api/auction/connect-wallet`.
   - Standardized on `POST /api/auction/connect-multi-wallet` which now always upserts both addresses and metadata on `User`.
@@ -460,7 +460,8 @@ Refund mechanism:
 - `POST /api/auth/guest-id` - Get a guest ID (used for identifying guest users; no bearer token required)
 
 ### Auction
-- `GET /api/auction/status` - Get auction status (public)
+- `GET /api/auction/status` - Get auction status (public). If no active auction exists for the network, falls back to the most recent auction on that network (ended).
+  - Query: `?network=mainnet|testnet` (optional; defaults to backend `BTC_NETWORK`).
 - `POST /api/auction/reset` - Dev-only auction reset: deletes pledges for the active auction and restarts it with a fresh 72h window; does not touch users
 - `POST /api/auction/reseed[?mode=test|prod]` - Dev-only full DB wipe + reseed.
   - `mode=test` (default): truncates `User`, `Auction`, `Pledge` and seeds admin, sample users, one active 24h auction (demo bounds) and 3–6 pledges.

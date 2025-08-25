@@ -9,7 +9,8 @@ import {
   getUserAllocation,
   getAuctionStats,
   searchAuctions,
-  resetAuction
+  resetAuction,
+  getCurrentAuctionStatus
 } from '../controllers/auctionController';
 import { authenticateJWT } from '../middleware/auth';
 import { verifyAdminAccess } from './api/auction/reset';
@@ -20,6 +21,7 @@ const router = express.Router();
 // Public routes
 router.get('/', getAllAuctions);
 router.get('/search', searchAuctions);
+router.get('/status', getCurrentAuctionStatus);
 router.get('/:id', getAuction);
 router.get('/:id/stats', getAuctionStats);
 router.get('/:auctionId/pledges', getAuctionPledges);

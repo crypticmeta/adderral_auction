@@ -133,6 +133,17 @@ export const initializeSocketIO = (server: http.Server): Server => {
     // Send initial auction status
     sendAuctionStatus(socket);
 
+    // Respond to explicit status requests from clients
+    // Frontend periodically emits 'get_auction_status' to refresh figures
+    socket.on('get_auction_status', async () => {
+      try {
+        await sendAuctionStatus(socket);
+      } catch (e) {
+        console.error('Error on get_auction_status:', e);
+        socket.emit(SocketEvents.ERROR, { message: 'Failed to get auction status' });
+      }
+    });
+
     // Handle wallet connection
     socket.on(SocketEvents.WALLET_CONNECTED, async (data) => {
       try {
@@ -171,7 +182,8 @@ export const sendAuctionStatus = async (socket: any) => {
       (String(n).toLowerCase() === 'testnet' ? 'TESTNET' : 'MAINNET');
     const targetNet = toEnumNetwork(config.btcNetwork);
     // Get auction data from database
-    const auction = await prisma.auction.findFirst({
+    // Prefer the currently active auction. If none, fall back to the most recent auction for this network (ended/completed).
+    let auction = await prisma.auction.findFirst({
       where: { isActive: true, network: targetNet },
       orderBy: { startTime: 'desc' },
       include: {
@@ -184,13 +196,28 @@ export const sendAuctionStatus = async (socket: any) => {
     });
 
     if (!auction) {
-      socket.emit(SocketEvents.ERROR, { message: `No active auction found for ${targetNet}` });
+      auction = await prisma.auction.findFirst({
+        where: { network: targetNet },
+        orderBy: { startTime: 'desc' },
+        include: {
+          pledges: {
+            include: {
+              user: true
+            }
+          }
+        }
+      });
+    }
+
+    if (!auction) {
+      socket.emit(SocketEvents.ERROR, { message: `No auction found for ${targetNet}` });
       return;
     }
 
     // Calculate remaining time
     const now = new Date();
-    const remainingTime = Math.max(0, auction.endTime.getTime() - now.getTime());
+    const endTimeMs = auction?.endTime ? new Date(auction.endTime).getTime() : 0;
+    const remainingTime = Math.max(0, endTimeMs - now.getTime());
 
     // Check if auction should be completed due to time
     if (auction.isActive && remainingTime <= 0) {
@@ -215,8 +242,10 @@ export const sendAuctionStatus = async (socket: any) => {
       btcPrice = null;
     }
 
-    const currentMarketCap = btcPrice ? auction.totalBTCPledged * btcPrice : 0;
-    const currentPrice = btcPrice && auction.totalTokens > 0 ? currentMarketCap / auction.totalTokens : 0;
+    const pledgedBtc = Number(auction?.totalBTCPledged ?? 0);
+    const totalTokens = Number(auction?.totalTokens ?? 0);
+    const currentMarketCap = btcPrice ? pledgedBtc * btcPrice : 0;
+    const currentPrice = btcPrice && totalTokens > 0 ? currentMarketCap / totalTokens : 0;
     const ceilingReached = typeof auction.ceilingMarketCap === 'number'
       ? currentMarketCap >= auction.ceilingMarketCap
       : false;
@@ -226,27 +255,27 @@ export const sendAuctionStatus = async (socket: any) => {
       id: auction.id,
       isActive: auction.isActive,
       isCompleted: auction.isCompleted,
-      totalBTCPledged: auction.totalBTCPledged,
-      refundedBTC: auction.refundedBTC ?? 0,
+      totalBTCPledged: pledgedBtc,
+      refundedBTC: Number(auction?.refundedBTC ?? 0),
       remainingTime, // ms
       serverTime: now.getTime(), // ms
       startTime: auction.startTime,
       endTime: auction.endTime,
-      totalTokens: auction.totalTokens,
-      tokensOnSale: Number(((auction as any)?.tokensOnSale ?? auction.totalTokens) || 0),
-      ceilingMarketCap: auction.ceilingMarketCap,
+      totalTokens: totalTokens,
+      tokensOnSale: Number(((auction as any)?.tokensOnSale ?? totalTokens) || 0),
+      ceilingMarketCap: Number(auction?.ceilingMarketCap ?? 0),
       currentMarketCap,
       // convert sats -> BTC for client display
-      minPledge: ((auction as any)?.minPledgeSats ?? 0) / 1e8,
-      maxPledge: ((auction as any)?.maxPledgeSats ?? 0) / 1e8,
+      minPledge: Number(((auction as any)?.minPledgeSats ?? 0)) / 1e8,
+      maxPledge: Number(((auction as any)?.maxPledgeSats ?? 0)) / 1e8,
       ceilingReached,
       currentPrice,
       priceError,
       pledges: auction.pledges.map(pledge => ({
         id: pledge.id,
         userId: pledge.userId,
-        cardinal_address: pledge.user.cardinal_address,
-        ordinal_address: pledge.user.ordinal_address,
+        cardinal_address: pledge.user?.cardinal_address ?? null,
+        ordinal_address: pledge.user?.ordinal_address ?? null,
         btcAmount: ((pledge as any).satAmount ?? 0) / 1e8,
         timestamp: pledge.timestamp,
         verified: pledge.verified
