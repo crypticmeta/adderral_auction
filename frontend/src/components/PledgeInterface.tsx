@@ -2,6 +2,7 @@
 // Update: Added pledge amount slider with 25/50/75/100% checkpoints (100% leaves 10,000 sats for fees). Syncs with input.
 // Update: Displays USD equivalent of entered BTC pledge using live BTC price (with null checks).
 // Update: Adopted pay-first flow: fetch deposit address, perform wallet payment to get txid, then create pledge with txid.
+// Update: Disable pledge input/button when auction has ended (time remaining == 0 or isActive === false).
 // Testing mode: simulates payment by delaying randomly (0.3s–2s) and generating a fake txid for load testing.
 import React, { useEffect, useMemo, useState } from 'react';
 import type { WalletDetails, CreatePledgeRequest } from '@shared/types/common';
@@ -37,6 +38,19 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
   const isPreStart = typeof auctionState?.startTimeMs === 'number' && typeof auctionState?.serverTimeMs === 'number'
     ? ((auctionState?.serverTimeMs as number) < (auctionState?.startTimeMs as number))
     : false;
+
+  // Disable pledging when auction has ended
+  const isEnded = useMemo(() => {
+    const inactive = auctionState?.isActive === false;
+    const h = auctionState?.timeRemaining?.hours ?? 0;
+    const m = auctionState?.timeRemaining?.minutes ?? 0;
+    const s = auctionState?.timeRemaining?.seconds ?? 0;
+    const zeroRemaining = (h + m + s) === 0;
+    const endMs = auctionState?.endTimeMs;
+    const srv = auctionState?.serverTimeMs;
+    const pastEnd = typeof endMs === 'number' && typeof srv === 'number' ? (srv >= endMs) : false;
+    return Boolean(inactive || zeroRemaining || pastEnd);
+  }, [auctionState?.isActive, auctionState?.timeRemaining?.hours, auctionState?.timeRemaining?.minutes, auctionState?.timeRemaining?.seconds, auctionState?.endTimeMs, auctionState?.serverTimeMs]);
 
   // Backend BTC price
   const [backendPrice, setBackendPrice] = useState<number | null>(null);
@@ -435,7 +449,7 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
   // No auto-verify timers on frontend; no cleanup required.
 
   const disabled = !isWalletConnected || isPending || !pledgeAmount;
-  const isDisabled = isPreStart || disabled || exceedsBalance;
+  const isDisabled = isPreStart || isEnded || disabled || exceedsBalance;
 
   return (
     <div className="glass-card p-8 rounded-3xl">
@@ -446,10 +460,10 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
         </div>
       </div>
 
-      {isPreStart && (
+      {(isPreStart || isEnded) && (
         <div className="mb-6 rounded-xl px-4 py-3 text-sm border bg-amber-500/10 border-amber-500/40 text-amber-300">
-          <p className="font-semibold">Pledging opens when the auction starts.</p>
-          {typeof auctionState?.startTimeMs === 'number' && (
+          <p className="font-semibold">{isPreStart ? 'Pledging opens when the auction starts.' : 'Auction has ended. Pledging is disabled.'}</p>
+          {isPreStart && typeof auctionState?.startTimeMs === 'number' && (
             <p className="text-xs opacity-90 mt-1">Scheduled start (UTC): {new Date(auctionState.startTimeMs).toUTCString()}</p>
           )}
         </div>
@@ -583,7 +597,7 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
             onChange={(e) => setPledgeAmount(e.target.value)}
             data-testid="input-pledge-amount"
             className="w-full bg-dark-800 border border-gray-600 focus:border-adderrels-500 rounded-xl px-4 py-4 pr-16 text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-adderrels-500/50 transition-all duration-300"
-            disabled={isPreStart}
+            disabled={isPreStart || isEnded}
           />
           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">BTC</span>
         </div>
@@ -634,7 +648,9 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
         <p className="text-sm text-gray-400">
           {isPreStart
             ? 'Pledging is disabled until the auction starts.'
-            : (isWalletConnected ? 'Enter your BTC amount to participate in the auction' : 'Connect your wallet to participate in the auction')}
+            : (isEnded
+              ? 'This auction has ended. You can still browse final stats.'
+              : (isWalletConnected ? 'Enter your BTC amount to participate in the auction' : 'Connect your wallet to participate in the auction'))}
         </p>
       </div>
     </div>

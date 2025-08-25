@@ -43,6 +43,7 @@ A new background task now verifies pledge txids against mempool.space and marks 
     - USD values: compact currency, e.g. `$5K`, `$15M`.
     - Null-safe parsing with fallbacks.
   - Pre-start behavior: before the auction start time, the UI now shows a "Starts In" countdown (including days when >24h), hides the progress bar and raised stats, and disables the pledge interface.
+  - Ended behavior: when the auction has ended (time remaining is 0 or the auction is inactive), the pledge amount input and "Pledge BTC" button are disabled and the UI shows a subtle "Auction has ended" note in the pledge card.
 # Adderrels Auction Platform
 
 ## Recent Updates
