@@ -587,10 +587,27 @@ export const processNextPledge = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Auction not found' });
     }
     
-    // Process the next pledge
+    // Compute BTC price to convert ceiling USD -> BTC
+    const btcPriceService = BitcoinPriceService.getInstance();
+    const btcPrice = await btcPriceService.getBitcoinPrice();
+    if (!(btcPrice > 0)) {
+      return res.status(503).json({ error: 'BTC price unavailable; cannot process queue safely' });
+    }
+
+    // Confirmed BTC from DB (processed and not refunded) to avoid drift
+    const confirmedAgg = await prisma.pledge.aggregate({
+      _sum: { satAmount: true },
+      where: { auctionId, processed: true, needsRefund: false }
+    });
+    const confirmedBTC = Number(confirmedAgg._sum?.satAmount || 0) / 1e8;
+
+    // Convert ceiling USD to BTC using current price
+    const ceilingBTC = auction.ceilingMarketCap / btcPrice;
+
+    // Process the next pledge using BTC-denominated ceiling and totals
     const pledge = await pledgeQueueService.processNextPledge(
-      auction.ceilingMarketCap,
-      auction.totalBTCPledged
+      ceilingBTC,
+      confirmedBTC
     );
     
     if (!pledge) {

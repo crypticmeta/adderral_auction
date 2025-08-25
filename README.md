@@ -51,6 +51,10 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - Backend `auction_status` computes `currentMarketCap` from processed BTC (`totalBTCPledged`) plus pending queued BTC for the active auction.
   - New field `pendingBTCPledged` (BTC) is included in the WS payload for transparency.
   - Frontend `PledgeQueue` listens to both `pledge_created` and `pledge:created` (and verified/processed variants) to refresh promptly across clients.
+**Accurate totals + ceiling comparison**
+  - `auction_status` confirmed BTC comes from DB aggregates of processed, non-refunded pledges; pending BTC combines DB unprocessed pledges + Redis queue.
+  - `currentMarketCap` and `currentPrice` derive from these computed values; `priceError` is preserved when BTC price is unavailable.
+  - In `backend/src/controllers/pledgeController.ts#processNextPledge`, the USD ceiling (`ceilingMarketCap`) is converted to BTC using the live BTC price before comparing to confirmed BTC totals.
 **Your Pledges identity + live refresh**
   - `frontend/src/components/YourPledges.tsx` now fetches by connected wallet cardinal address when available, falling back to `guestId`.
   - Auto-refreshes on websocket pledge events: `pledge_created`, `pledge:created`, `pledge_verified`, `pledge:processed`, `pledge:queue:update`, `pledge:queue:position`.
@@ -58,6 +62,9 @@ A new background task now verifies pledge txids against mempool.space and marks 
 **Sticky Market Cap/Price during transient price errors**
   - `frontend/src/contexts/WebSocketContext.tsx` preserves last non-zero `currentMarketCap`, `currentPrice`, and `progressPercentage` when `auction_status` reports `priceError` or zeros.
   - Prevents the UI from flashing/resetting to zero during upstream price fetch hiccups.
+**WS debug logging de-duplicated**
+  - Removed catch-all `socket.onAny` inbound logger to avoid duplicate entries alongside per-event logs.
+  - File: `frontend/src/contexts/WebSocketContext.tsx` (explicit per-event logging retained for clarity).
 **UI tooltips for formulas**
   - Current Market Cap cards show a tooltip explaining: `(Processed BTC + Queued BTC) × BTC/USD`.
   - Allocation estimates show a tooltip: `Estimated tokens ≈ (Pledge BTC × BTC/USD) ÷ Current Token Price`.

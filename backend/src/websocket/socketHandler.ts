@@ -247,10 +247,32 @@ export const sendAuctionStatus = async (socket: any) => {
       btcPrice = null;
     }
 
-    const pledgedBtc = Number(auction?.totalBTCPledged ?? 0);
+    // Derive confirmed and pending amounts from DB to avoid stale totals
+    // confirmed = sum of processed pledges that do not need refund
+    // pending = sum of unprocessed pledges (not yet decided) + anything currently in Redis queue
     const totalTokens = Number(auction?.totalTokens ?? 0);
 
-    // Sum pending (queued) BTC for this auction to reflect immediate progress
+    let confirmedBtc = 0;
+    let pendingDbBtc = 0;
+    try {
+      const [confirmedAgg, pendingAgg] = await Promise.all([
+        prisma.pledge.aggregate({
+          _sum: { satAmount: true },
+          where: { auctionId: auction.id, processed: true, needsRefund: false }
+        }),
+        prisma.pledge.aggregate({
+          _sum: { satAmount: true },
+          where: { auctionId: auction.id, processed: false }
+        })
+      ]);
+      confirmedBtc = Number(confirmedAgg._sum?.satAmount || 0) / 1e8;
+      pendingDbBtc = Number(pendingAgg._sum?.satAmount || 0) / 1e8;
+    } catch (_) {
+      confirmedBtc = Number(auction?.totalBTCPledged ?? 0);
+      pendingDbBtc = 0;
+    }
+
+    // Sum pending (queued) BTC for this auction from Redis queue
     let queuedBtc = 0;
     try {
       const allQueued = await pledgeQueueService.getAllPledges();
@@ -259,12 +281,14 @@ export const sendAuctionStatus = async (socket: any) => {
           .filter((p: any) => String(p?.auctionId) === String(auction?.id))
           .reduce((acc: number, p: any) => acc + (Number(p?.btcAmount) || 0), 0);
       }
-    } catch (e) {
-      // Non-fatal: if queue unavailable, just use processed only
+    } catch (_) {
       queuedBtc = 0;
     }
 
-    const effectiveBtc = pledgedBtc + queuedBtc;
+    // Effective pending = DB pending (not yet processed) plus anything currently in queue
+    // Note: DB pending and Redis queue may overlap shortly; minor overcount is acceptable for UI progress.
+    const pendingBTC = Math.max(0, pendingDbBtc + queuedBtc);
+    const effectiveBtc = confirmedBtc + pendingBTC;
     const currentMarketCap = btcPrice ? effectiveBtc * btcPrice : 0;
     const currentPrice = btcPrice && totalTokens > 0 ? currentMarketCap / totalTokens : 0;
     const ceilingReached = typeof auction.ceilingMarketCap === 'number'
@@ -276,8 +300,8 @@ export const sendAuctionStatus = async (socket: any) => {
       id: auction.id,
       isActive: auction.isActive,
       isCompleted: auction.isCompleted,
-      totalBTCPledged: pledgedBtc,
-      pendingBTCPledged: queuedBtc,
+      totalBTCPledged: confirmedBtc,
+      pendingBTCPledged: pendingBTC,
       refundedBTC: Number(auction?.refundedBTC ?? 0),
       remainingTime, // ms
       serverTime: now.getTime(), // ms

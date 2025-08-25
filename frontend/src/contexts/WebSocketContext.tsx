@@ -195,12 +195,6 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         reconnectionDelay: 1000,
       });
 
-      // Log any inbound event for debugging
-      try {
-        (newSocket as any).onAny?.((event: string, ...args: any[]) => {
-          debug?.addEntry('in', event, args?.length === 1 ? args[0] : args);
-        });
-      } catch {}
 
       newSocket.on('connect', () => {
         setIsConnected(true);
