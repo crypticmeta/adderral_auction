@@ -421,6 +421,17 @@ Additional controls exposed in the Debug Window:
   - Use HTTP APIs to create real users explicitly if needed in tests/dev.
   - These require backend `TESTING=true` and frontend `NEXT_PUBLIC_TESTING=true`.
 
+### Testing: Create Test User on "Test Connect"
+
+- Backend exposes `POST /api/testing/create-test-user` (gated by `TESTING=true`).
+  - Body: `{ userId?: string, wallet?: string, cardinal?: string, ordinal?: string, cardinalPubkey?: string, ordinalPubkey?: string, network?: 'mainnet'|'testnet' }`
+  - Behavior: Upserts a `User` with `connected=true` and returns `{ user: { id, ... } }`.
+- Frontend `Header` uses this endpoint when clicking "Test Connect":
+  - Stores a random test wallet in `localStorage.testWallet`.
+  - Calls `/api/testing/create-test-user` with wallet details.
+  - Saves returned `user.id` into `localStorage.guestId` so pledges pass user existence checks.
+  - Sets `localStorage.testWalletConnected = 'true'` and emits `test-wallet-connected` event.
+
 Network selection:
 
 - Frontend auto-syncs to the backend network reported by `GET /status` (`mainnet` or `testnet`).

@@ -21,6 +21,65 @@ const requireTestingEnabled = (req: Request, res: Response, next: NextFunction) 
   next();
 };
 
+// POST /api/testing/create-test-user
+// Body: { userId?: string, wallet?: string, cardinal?: string, ordinal?: string, cardinalPubkey?: string, ordinalPubkey?: string, network?: 'mainnet'|'testnet' }
+router.post('/create-test-user', requireTestingEnabled, async (req: Request, res: Response) => {
+  try {
+    const body = (req?.body ?? {}) as any;
+    const nowId = `test_user_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    const userId: string = (typeof body.userId === 'string' && body.userId.trim().length > 0) ? body.userId.trim() : nowId;
+
+    const wallet: string | null = typeof body.wallet === 'string' && body.wallet.trim() ? body.wallet.trim() : null;
+    const cardinal: string | null = typeof body.cardinal === 'string' && body.cardinal.trim() ? body.cardinal.trim() : null;
+    const ordinal: string | null = typeof body.ordinal === 'string' && body.ordinal.trim() ? body.ordinal.trim() : null;
+    const cardinalPubkey: string | null = typeof body.cardinalPubkey === 'string' && body.cardinalPubkey.trim() ? body.cardinalPubkey.trim() : null;
+    const ordinalPubkey: string | null = typeof body.ordinalPubkey === 'string' && body.ordinalPubkey.trim() ? body.ordinalPubkey.trim() : null;
+    const netIn: string | null = typeof body.network === 'string' && body.network.trim() ? body.network.trim() : null;
+
+    // Normalize to lower-case string for DB string field; align with config when missing
+    const normalizedNetwork: string = (netIn ?? String(config.btcNetwork || 'mainnet')).toLowerCase();
+
+    const user = await prisma.user.upsert({
+      where: { id: userId },
+      update: {
+        wallet: wallet ?? undefined,
+        cardinal_address: cardinal ?? undefined,
+        ordinal_address: ordinal ?? undefined,
+        cardinal_pubkey: cardinalPubkey ?? undefined,
+        ordinal_pubkey: ordinalPubkey ?? undefined,
+        network: normalizedNetwork,
+        connected: true,
+      },
+      create: {
+        id: userId,
+        wallet,
+        cardinal_address: cardinal,
+        ordinal_address: ordinal,
+        cardinal_pubkey: cardinalPubkey,
+        ordinal_pubkey: ordinalPubkey,
+        network: normalizedNetwork,
+        connected: true,
+      },
+      select: {
+        id: true,
+        wallet: true,
+        cardinal_address: true,
+        ordinal_address: true,
+        cardinal_pubkey: true,
+        ordinal_pubkey: true,
+        network: true,
+        connected: true,
+        createdAt: true,
+      }
+    });
+
+    return res.status(200).json({ user });
+  } catch (error) {
+    console.error('Error creating test user:', error);
+    return res.status(500).json({ error: 'Failed to create test user' });
+  }
+});
+
 // POST /api/testing/reset-pledges
 router.post('/reset-pledges', requireTestingEnabled, async (_req: Request, res: Response) => {
   try {

@@ -124,8 +124,41 @@ export default function Header() {
       console.log('[TestConnect] Selected fallback wallet', walletObj.wallet);
     }
 
+    // Persist test wallet locally and create a backing test user in DB
     try {
       localStorage.setItem('testWallet', JSON.stringify(walletObj));
+      // Create or upsert a test user in backend so pledges pass user existence checks
+      try {
+        const payload = {
+          wallet: walletObj?.wallet ?? 'TestWallet',
+          cardinal: walletObj?.cardinal ?? '',
+          ordinal: walletObj?.ordinal ?? '',
+          cardinalPubkey: walletObj?.cardinalPubkey ?? '',
+          ordinalPubkey: walletObj?.ordinalPubkey ?? '',
+          network: (network || 'mainnet'),
+        };
+        const res = await fetch(`${env.apiUrl}/api/testing/create-test-user`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => null) as any;
+          const userId = data?.user?.id as string | undefined;
+          if (userId && typeof userId === 'string') {
+            // We reuse 'guestId' storage key as the client identity knob for sockets/pledges
+            localStorage.setItem('guestId', userId);
+            console.log('[TestConnect] Created test user in DB:', userId);
+          } else {
+            console.warn('[TestConnect] create-test-user: missing user.id in response');
+          }
+        } else {
+          console.warn('[TestConnect] create-test-user failed with status', res.status);
+        }
+      } catch (e) {
+        console.warn('[TestConnect] Failed to call create-test-user endpoint', e);
+      }
+
       localStorage.setItem('testWalletConnected', 'true');
       console.log('[TestConnect] localStorage set: testWalletConnected=true');
       // Notify app of test connection change in same tab
