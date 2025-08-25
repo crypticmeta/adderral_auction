@@ -175,7 +175,7 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
     try {
       // Gather identifiers and wallet metadata
       const guestId = typeof window !== 'undefined' ? localStorage.getItem('guestId') : null;
-      const userId = guestId || undefined;
+      let resolvedUserId: string | undefined;
 
       // Build wallet details based on mode
       let walletDetails: WalletDetails | null = null;
@@ -214,12 +214,21 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
         // No pre-pledge signature; payment itself serves as proof of control.
       }
 
-      if (!userId) {
+      // Resolve user id to cardinal address when available; else fallback to existing guest id
+      if (walletDetails && typeof walletDetails.cardinal === 'string' && walletDetails.cardinal.trim().length > 0) {
+        resolvedUserId = walletDetails.cardinal.trim();
+      } else if (guestId && guestId.trim().length > 0) {
+        resolvedUserId = guestId.trim();
+      }
+
+      if (!resolvedUserId) {
         throw new Error('Missing user identity. Please refresh the page to initialize connection.');
       }
       if (!walletDetails || !walletDetails.cardinal) {
         throw new Error('Missing wallet info. Please connect your wallet first.');
       }
+      // Persist resolved user id for subsequent requests
+      try { if (typeof window !== 'undefined') localStorage.setItem('guestId', resolvedUserId); } catch {}
       // New flow: get deposit address (with retry), pay, obtain txid, then create pledge with txid
       const addrData: DepositAddressResponse = await fetchDepositAddressWithRetry(1, 500);
       const depositAddress: string | null = addrData?.depositAddress ?? null;
@@ -246,7 +255,7 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
 
       // Optional: re-check ceiling; proceed regardless to allow refund tracking
       const payload: CreatePledgeRequest = {
-        userId,
+        userId: resolvedUserId,
         satsAmount: sats,
         walletDetails,
         txid: txFromPay,

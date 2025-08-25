@@ -239,14 +239,8 @@ export const createPledge = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Validate the user exists
-    const user = await prisma.user.findUnique({
-      where: { id: userId }
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    // Validate the user exists; if not and userId is the cardinal address, upsert safely
+    let user = await prisma.user.findUnique({ where: { id: userId } });
 
     // Get active auction for configured network only
     const auction = await prisma.auction.findFirst({
@@ -261,6 +255,44 @@ export const createPledge = async (req: Request, res: Response) => {
     const clientNet = (walletDetails?.network as string | undefined) || null;
     if (clientNet && toEnumNetwork(clientNet) !== auction.network) {
       return res.status(400).json({ error: `Wallet network (${clientNet}) does not match auction network (${auction.network})` });
+    }
+
+    // If user not found and userId equals provided cardinal address, create the user with id = cardinal address
+    if (!user) {
+      const cardinalAddr: string = (walletDetails?.cardinal || '').trim();
+      const ordinalAddr: string = (walletDetails?.ordinal || '').trim();
+      if (cardinalAddr && cardinalAddr === userId) {
+        // Ensure address matches auction network to avoid cross-network collisions
+        if (!isAddressForNetwork(cardinalAddr, auction.network)) {
+          return res.status(400).json({ error: `Provided cardinal address does not match ${auction.network} network` });
+        }
+        user = await prisma.user.upsert({
+          where: { id: userId },
+          update: {
+            wallet: (walletDetails?.wallet as string | undefined) || undefined,
+            cardinal_address: cardinalAddr,
+            ordinal_address: ordinalAddr || undefined,
+            cardinal_pubkey: (walletDetails?.cardinalPubkey as string | undefined) || undefined,
+            ordinal_pubkey: (walletDetails?.ordinalPubkey as string | undefined) || undefined,
+            network: String(config.btcNetwork || 'mainnet').toLowerCase(),
+            connected: true,
+          },
+          create: {
+            id: userId,
+            wallet: (walletDetails?.wallet as string | undefined) || undefined,
+            cardinal_address: cardinalAddr,
+            ordinal_address: ordinalAddr || undefined,
+            cardinal_pubkey: (walletDetails?.cardinalPubkey as string | undefined) || undefined,
+            ordinal_pubkey: (walletDetails?.ordinalPubkey as string | undefined) || undefined,
+            network: String(config.btcNetwork || 'mainnet').toLowerCase(),
+            connected: true,
+          }
+        });
+      }
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
     // Validate pledge amount with projected capacity (confirmed + pending)

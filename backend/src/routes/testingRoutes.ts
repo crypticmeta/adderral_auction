@@ -27,7 +27,6 @@ router.post('/create-test-user', requireTestingEnabled, async (req: Request, res
   try {
     const body = (req?.body ?? {}) as any;
     const nowId = `test_user_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-    const userId: string = (typeof body.userId === 'string' && body.userId.trim().length > 0) ? body.userId.trim() : nowId;
 
     const wallet: string | null = typeof body.wallet === 'string' && body.wallet.trim() ? body.wallet.trim() : null;
     const cardinal: string | null = typeof body.cardinal === 'string' && body.cardinal.trim() ? body.cardinal.trim() : null;
@@ -39,8 +38,13 @@ router.post('/create-test-user', requireTestingEnabled, async (req: Request, res
     // Normalize to lower-case string for DB string field; align with config when missing
     const normalizedNetwork: string = (netIn ?? String(config.btcNetwork || 'mainnet')).toLowerCase();
 
+    // Prefer user id = cardinal address when available, else provided userId, else generated id
+    const resolvedUserId: string = (cardinal && cardinal.trim().length > 0)
+      ? cardinal
+      : ((typeof body.userId === 'string' && body.userId.trim().length > 0) ? body.userId.trim() : nowId);
+
     const user = await prisma.user.upsert({
-      where: { id: userId },
+      where: { id: resolvedUserId },
       update: {
         wallet: wallet ?? undefined,
         cardinal_address: cardinal ?? undefined,
@@ -51,7 +55,7 @@ router.post('/create-test-user', requireTestingEnabled, async (req: Request, res
         connected: true,
       },
       create: {
-        id: userId,
+        id: resolvedUserId,
         wallet,
         cardinal_address: cardinal,
         ordinal_address: ordinal,
