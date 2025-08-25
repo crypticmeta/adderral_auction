@@ -265,7 +265,7 @@ A Next.js application integrated with an Express server implementing WebSocket c
 - 72-hour auction time limit enforcement
 - Automatic refund mechanism for excess pledges
 - Redis-based pledge queue with real-time position updates
-- Pledge queue display showing status and position
+- Pledge queue display showing pledge status and position
 - Tabbed interface to switch between pledge form and queue
 
 ## Project Structure

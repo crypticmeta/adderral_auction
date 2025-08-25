@@ -92,6 +92,19 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
     return Number.isFinite(btc) ? btc : 0;
   }, [isTesting, maxPledgeInfo?.currentBTCPrice, auctionState?.currentPrice]);
 
+  // Projected capacity (confirmed + pending). These extra fields are supplied by the backend API.
+  const pendingSats = useMemo(() => Number((maxPledgeInfo as any)?.pendingPledgeSats ?? 0), [maxPledgeInfo]);
+  const projectedRemainingSats = useMemo(() => {
+    const v = (maxPledgeInfo as any)?.projectedRemainingSats;
+    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  }, [maxPledgeInfo]);
+  const projectedPercent = useMemo(() => {
+    const v = (maxPledgeInfo as any)?.projectedPercent;
+    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  }, [maxPledgeInfo]);
+  const projectedFull = (projectedRemainingSats !== null && projectedRemainingSats <= 0)
+    || (projectedPercent !== null && projectedPercent >= 100);
+
   // Fetch deposit address with simple retry for transient errors
   const fetchDepositAddressWithRetry = async (
     retries = 1,
@@ -288,6 +301,12 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
         </div>
       )}
 
+      {projectedFull && (
+        <div className="bg-amber-600/20 border border-amber-500/30 text-amber-300 px-4 py-3 rounded-lg mb-4 text-sm" role="status" aria-live="polite">
+          Capacity temporarily full while pending transactions settle. Please try again shortly.
+        </div>
+      )}
+
       {auctionState?.ceilingReached && (
         <div className="bg-gradient-to-r from-amber-600/20 to-amber-700/20 border border-amber-500/30 text-amber-400 px-4 py-3 rounded-lg mb-4 text-sm">
           <div className="flex items-center">
@@ -365,7 +384,7 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
               className="w-full px-3 py-2 bg-dark-900/50 border border-primary-500/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 pr-12 text-gray-200 placeholder-gray-500"
               placeholder="0.01"
               required
-              disabled={!isWalletConnected || !isAuctionActive || ceilingReached || isLoading || (pledgeData && !pledgeData.verified) || belowMinCapacity || zeroCapacity}
+              disabled={!isWalletConnected || !isAuctionActive || ceilingReached || isLoading || (pledgeData && !pledgeData.verified) || belowMinCapacity || zeroCapacity || projectedFull}
             />
             <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-gray-400 text-sm">
               BTC
@@ -385,7 +404,7 @@ const PledgeForm: React.FC<PledgeFormProps> = ({ isWalletConnected }) => {
 
         <button
           type="submit"
-          disabled={!isWalletConnected || !isAuctionActive || ceilingReached || isLoading || !!pledgeData || belowMinCapacity || zeroCapacity}
+          disabled={!isWalletConnected || !isAuctionActive || ceilingReached || isLoading || !!pledgeData || belowMinCapacity || zeroCapacity || projectedFull}
           className="w-full bg-gradient-to-r from-primary-500 to-primary-600 text-white py-2.5 px-4 rounded-lg hover:from-primary-600 hover:to-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-primary-500/25 font-medium"
         >
           {isLoading ? 'Processing...' : 'Pledge Now'}

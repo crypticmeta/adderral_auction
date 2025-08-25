@@ -54,6 +54,23 @@ export const getDepositAddress = async (_req: Request, res: Response) => {
     if (!auction) {
       return res.status(404).json({ error: 'No active auction found' });
     }
+    // Soft-close admission control: if projected (confirmed + pending) >= ceiling, block address issuance
+    try {
+      const btcPriceService = BitcoinPriceService.getInstance();
+      const price = await btcPriceService.getBitcoinPrice();
+      if (price && price > 0) {
+        const pendingAgg = await prisma.pledge.aggregate({ _sum: { satAmount: true }, where: { auctionId: auction.id, processed: false } });
+        const pendingBTC = Number(pendingAgg._sum?.satAmount || 0) / 1e8;
+        const confirmedBTC = auction.totalBTCPledged || 0;
+        const ceilingBTC = auction.ceilingMarketCap / price;
+        const projected = confirmedBTC + pendingBTC;
+        if (projected >= ceilingBTC) {
+          return res.status(409).json({ error: 'Pledging temporarily paused while pending transactions settle', reason: 'projected_capacity_full' });
+        }
+      }
+    } catch (e) {
+      // non-fatal: continue if price unavailable
+    }
     const depositAddress = (config.depositAddress || '').trim();
     if (!depositAddress) {
       return res.status(500).json({ error: 'Deposit address not configured. Set BTC_DEPOSIT_ADDRESS in env.' });
@@ -246,7 +263,7 @@ export const createPledge = async (req: Request, res: Response) => {
       return res.status(400).json({ error: `Wallet network (${clientNet}) does not match auction network (${auction.network})` });
     }
 
-    // Validate pledge amount (compare in BTC, source of truth in sats)
+    // Validate pledge amount with projected capacity (confirmed + pending)
     const maxPledge = await calculateMaxPledgeInternal(auction);
     const minBTC = ((auction?.minPledgeSats ?? 0) as number) / 1e8;
     const btcValue = Number(satsAmount) / 1e8;
@@ -254,6 +271,27 @@ export const createPledge = async (req: Request, res: Response) => {
       return res.status(400).json({
         error: `Pledge amount must be between ${minBTC} and ${maxPledge} BTC`
       });
+    }
+
+    // Admission control based on projected totals
+    try {
+      const btcPriceService = BitcoinPriceService.getInstance();
+      const price = await btcPriceService.getBitcoinPrice();
+      if (!(price > 0)) {
+        return res.status(503).json({ error: 'BTC price unavailable; cannot validate capacity' });
+      }
+      const pendingAgg = await prisma.pledge.aggregate({ _sum: { satAmount: true }, where: { auctionId: auction.id, processed: false } });
+      const pendingBTC = Number(pendingAgg._sum?.satAmount || 0) / 1e8;
+      const confirmedBTC = auction.totalBTCPledged || 0;
+      const ceilingBTC = auction.ceilingMarketCap / price;
+      const projected = confirmedBTC + pendingBTC;
+      const remaining = Math.max(0, ceilingBTC - projected);
+      if (remaining <= 0 || btcValue > remaining) {
+        return res.status(409).json({ error: 'Capacity full due to pending transactions. Please try again later.', reason: 'projected_capacity_full', remainingBTC: remaining });
+      }
+    } catch (e) {
+      // If anything goes wrong, be safe and block to avoid over-pledge
+      return res.status(503).json({ error: 'Capacity check failed; please retry shortly' });
     }
     // Use provided deposit address when available (recommended); fallback to placeholder
     const depositAddress = depositFromBody ?? `btc_deposit_${Date.now().toString(16)}`;
@@ -460,15 +498,33 @@ export const calculateMaxPledge = async (req: Request, res: Response) => {
       auction.totalBTCPledged
     );
     
-    // Get current BTC price
+    // Get current BTC price and compute pending/projected
     const btcPriceService = BitcoinPriceService.getInstance();
     const btcPrice = await btcPriceService.getBitcoinPrice();
-    
+    let pendingSats = 0;
+    let projectedRemainingSats = null as number | null;
+    let projectedPercent = null as number | null;
+    if (btcPrice && btcPrice > 0) {
+      const pendingAgg = await prisma.pledge.aggregate({ _sum: { satAmount: true }, where: { auctionId, processed: false } });
+      pendingSats = Number(pendingAgg._sum?.satAmount || 0);
+      const confirmedBTC = auction.totalBTCPledged || 0;
+      const pendingBTC = pendingSats / 1e8;
+      const ceilingBTC = auction.ceilingMarketCap / btcPrice;
+      const projected = confirmedBTC + pendingBTC;
+      const remainingBTC = Math.max(0, ceilingBTC - projected);
+      projectedRemainingSats = Math.round(remainingBTC * 1e8);
+      const denom = ceilingBTC > 0 ? ceilingBTC : 1;
+      projectedPercent = Math.max(0, Math.min(100, (projected / denom) * 100));
+    }
+
     return res.status(200).json({
       // canonical sats fields only
       minPledgeSats: auction?.minPledgeSats ?? undefined,
       maxPledgeSats: auction?.maxPledgeSats ?? undefined,
-      currentBTCPrice: btcPrice
+      currentBTCPrice: btcPrice,
+      pendingPledgeSats: pendingSats,
+      projectedRemainingSats,
+      projectedPercent
     });
   } catch (error) {
     console.error('Error calculating max pledge:', error);

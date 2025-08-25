@@ -82,4 +82,6 @@ export interface AuctionProgressProps {
 
   progressPercentage: number;
   currentPrice: number; // token price in USD (or unit)
+  // Optional auction id to allow components to fetch richer metrics (e.g., pending)
+  auctionId?: string;
 }

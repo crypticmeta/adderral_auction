@@ -240,6 +240,7 @@ export default function Home() {
               ceilingReached={ceilingReached}
               progressPercentage={progressPercentage}
               currentPrice={currentPrice}
+              auctionId={auctionState?.id}
             />
 
             <PledgeContainer
