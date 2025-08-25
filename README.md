@@ -412,6 +412,13 @@ Additional controls exposed in the Debug Window:
       - `staggerMinMs` (default 50)
       - `staggerMaxMs` (default 400)
     - Each pledge creation sleeps a random time in `[staggerMinMs, staggerMaxMs]` before enqueueing.
+
+### Realtime / WebSocket Notes
+
+- Guest users are no longer persisted in the database.
+  - The Socket.IO auth middleware keeps `guestId` ephemeral and does not `create` a `User`.
+  - WS wallet-connected events only update wallet fields when the `userId` already exists in DB (no upsert for guests).
+  - Use HTTP APIs to create real users explicitly if needed in tests/dev.
   - These require backend `TESTING=true` and frontend `NEXT_PUBLIC_TESTING=true`.
 
 Network selection:

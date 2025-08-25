@@ -97,20 +97,14 @@ export const initializeSocketIO = (server: http.Server): Server => {
       socket.data.userId = guestId;
       socket.data.isAuthenticated = true;
 
-      // Check if user exists in database, create if not
+      // Do NOT persist guest users anymore. We keep guestId ephemeral in socket only.
+      // If a real user flow is needed, it must create a user explicitly via HTTP API.
       try {
-        const user = await prisma.user.findUnique({
-          where: { id: guestId }
-        });
-
-        if (!user) {
-          await prisma.user.create({
-            data: { id: guestId }
-          });
-        }
-      } catch (error) {
-        console.error('Database error:', error);
-        // Continue even if database operation fails
+        // Optional: lightweight existence check for later guards; ignore errors
+        const user = await prisma.user.findUnique({ where: { id: guestId } });
+        socket.data.userExists = Boolean(user);
+      } catch {
+        socket.data.userExists = false;
       }
 
       next();
@@ -149,15 +143,25 @@ export const initializeSocketIO = (server: http.Server): Server => {
       try {
         const { btcAddress, taprootAddress } = data;
         
-        // Update user wallet info in database
-        await prisma.user.update({
-          where: { id: socket.data.userId },
-          data: { 
-            cardinal_address: btcAddress, 
-            ordinal_address: taprootAddress,
-            connected: true
+        // Only update if this is an existing user; do not create guests in DB
+        if (socket?.data?.userId) {
+          try {
+            const existing = await prisma.user.findUnique({ where: { id: socket.data.userId } });
+            if (existing) {
+              await prisma.user.update({
+                where: { id: socket.data.userId },
+                data: {
+                  cardinal_address: btcAddress ?? existing.cardinal_address ?? null,
+                  ordinal_address: taprootAddress ?? existing.ordinal_address ?? null,
+                  connected: true
+                }
+              });
+            }
+          } catch (e) {
+            // Swallow update errors in WS path, report via error event
+            console.error('Wallet update error (WS):', e);
           }
-        });
+        }
 
         socket.emit(SocketEvents.WALLET_CONNECTED, { success: true });
       } catch (error) {
