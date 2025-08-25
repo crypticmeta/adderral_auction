@@ -54,12 +54,27 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const transformToAuctionState = (data: any | null): AuctionState | null => {
     if (!data) return null;
 
-    const totalTokensNum: number = typeof data.totalTokens === 'number' ? data.totalTokens : parseInt(String(data.totalTokens ?? 0), 10) || 0;
-    const tokensOnSaleNum: number = typeof data.tokensOnSale === 'number' ? data.tokensOnSale : parseInt(String(data.tokensOnSale ?? data.totalTokens ?? 0), 10) || 0;
+    const parseHumanNumber = (val: unknown): number => {
+      if (typeof val === 'number' && isFinite(val)) return val;
+      if (typeof val !== 'string') return 0;
+      const s = val.trim().replace(/,/g, '').toUpperCase();
+      const m = s.match(/^([0-9]*\.?[0-9]+)\s*([KMB])?$/);
+      if (!m) return Number(s) || 0;
+      const n = parseFloat(m[1]);
+      const suf = m[2];
+      const mult = suf === 'B' ? 1e9 : suf === 'M' ? 1e6 : suf === 'K' ? 1e3 : 1;
+      return n * mult;
+    };
+
+    const totalTokensNum: number = parseHumanNumber(data.totalTokens ?? 0);
+    const tokensOnSaleNum: number = parseHumanNumber(data.tokensOnSale ?? data.totalTokens ?? 0);
     const ceilingMarketCapNum: number = typeof data.ceilingMarketCap === 'number' ? data.ceilingMarketCap : parseFloat(String(data.ceilingMarketCap ?? 0)) || 0;
     const currentMarketCapNum: number = typeof data.currentMarketCap === 'number' ? data.currentMarketCap : 0;
     const refundedBTCNum: number = typeof data.refundedBTC === 'number' ? data.refundedBTC : 0;
-    const totalRaisedBTC: number = typeof data.totalBTCPledged === 'number' ? data.totalBTCPledged : 0;
+    const totalProcessedBTC: number = typeof data.totalBTCPledged === 'number' ? data.totalBTCPledged : 0;
+    const pendingBTC: number = typeof data.pendingBTCPledged === 'number' ? data.pendingBTCPledged : 0;
+    // Use processed + pending to align with how market cap is computed
+    const totalRaisedBTC: number = totalProcessedBTC + pendingBTC;
     const currentPrice: number = typeof data.currentPrice === 'number' ? data.currentPrice : 0;
     const priceError: boolean = Boolean(data.priceError ?? false);
     const isActive: boolean | undefined = typeof data.isActive === 'boolean' ? data.isActive : undefined;
@@ -220,6 +235,11 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         debug?.addEntry('in', 'pledge_created', data);
         requestStatus();
       });
+      // Support colon-style variant emitted elsewhere
+      newSocket.on('pledge:created', (data) => {
+        debug?.addEntry('in', 'pledge:created', data);
+        requestStatus();
+      });
       newSocket.on('pledge:queue:update', (data) => {
         debug?.addEntry('in', 'pledge:queue:update', data);
         requestStatus();
@@ -231,6 +251,11 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       });
       newSocket.on('pledge_verified', (data) => {
         debug?.addEntry('in', 'pledge_verified', data);
+        requestStatus();
+      });
+      // Also handle processed alias
+      newSocket.on('pledge:processed', (data) => {
+        debug?.addEntry('in', 'pledge:processed', data);
         requestStatus();
       });
 

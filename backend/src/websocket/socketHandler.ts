@@ -3,7 +3,7 @@
  * Manages real-time communication for auction updates, pledge events, and wallet connections
  */
 
-import { Server, Socket } from 'socket.io';
+import { Server } from 'socket.io';
 import http from 'http';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { Redis } from 'ioredis';
@@ -11,6 +11,7 @@ import { bitcoinPriceService } from '../services/bitcoinPriceService';
 import config from '../config/config';
 import prisma from '../config/prisma';
 import type { BtcNetwork } from '../generated/prisma';
+import pledgeQueueService from '../services/pledgeQueueService';
 
 type PledgeWithUser = {
   id: string;
@@ -248,7 +249,23 @@ export const sendAuctionStatus = async (socket: any) => {
 
     const pledgedBtc = Number(auction?.totalBTCPledged ?? 0);
     const totalTokens = Number(auction?.totalTokens ?? 0);
-    const currentMarketCap = btcPrice ? pledgedBtc * btcPrice : 0;
+
+    // Sum pending (queued) BTC for this auction to reflect immediate progress
+    let queuedBtc = 0;
+    try {
+      const allQueued = await pledgeQueueService.getAllPledges();
+      if (Array.isArray(allQueued)) {
+        queuedBtc = allQueued
+          .filter((p: any) => String(p?.auctionId) === String(auction?.id))
+          .reduce((acc: number, p: any) => acc + (Number(p?.btcAmount) || 0), 0);
+      }
+    } catch (e) {
+      // Non-fatal: if queue unavailable, just use processed only
+      queuedBtc = 0;
+    }
+
+    const effectiveBtc = pledgedBtc + queuedBtc;
+    const currentMarketCap = btcPrice ? effectiveBtc * btcPrice : 0;
     const currentPrice = btcPrice && totalTokens > 0 ? currentMarketCap / totalTokens : 0;
     const ceilingReached = typeof auction.ceilingMarketCap === 'number'
       ? currentMarketCap >= auction.ceilingMarketCap
@@ -260,6 +277,7 @@ export const sendAuctionStatus = async (socket: any) => {
       isActive: auction.isActive,
       isCompleted: auction.isCompleted,
       totalBTCPledged: pledgedBtc,
+      pendingBTCPledged: queuedBtc,
       refundedBTC: Number(auction?.refundedBTC ?? 0),
       remainingTime, // ms
       serverTime: now.getTime(), // ms

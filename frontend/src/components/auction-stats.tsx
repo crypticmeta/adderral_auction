@@ -1,5 +1,6 @@
 // Auction stats component showing key auction metrics (Raised card removed as progress is visible elsewhere)
 import { formatNumberCompact, formatUSDCompact } from '@/lib/format';
+import { Tooltip } from '@/components/ui/Tooltip';
 interface AuctionStatsProps {
     // totalTokens is passed in as a string representing millions (e.g., "100" for 100M, "0.01" for 10K)
     totalTokens: string;
@@ -68,7 +69,12 @@ export function AuctionStats({ totalTokens, tokensOnSale, ceilingMarketCap, curr
                 <h3 className="text-2xl font-bold text-green-400" data-testid="text-market-cap">
                     {currentLabel}
                 </h3>
-                <p className="text-gray-400">Current Market Cap</p>
+                <p className="text-gray-400 flex items-center justify-center gap-1">
+                    <span>Current Market Cap</span>
+                    <Tooltip text="Computed from processed BTC plus queued (pending) BTC for the active auction, valued at the current BTC/USD price.">
+                      <span className="text-xs text-gray-500 cursor-help" aria-hidden>ⓘ</span>
+                    </Tooltip>
+                </p>
             </div>
 
             {/* Max Duration */}

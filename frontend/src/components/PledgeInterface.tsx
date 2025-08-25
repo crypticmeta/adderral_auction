@@ -5,9 +5,10 @@
 // Update: Disable pledge input/button when auction has ended (time remaining == 0 or isActive === false).
 // Testing mode: simulates payment by delaying randomly (0.3s–2s) and generating a fake txid for load testing.
 import React, { useEffect, useMemo, useState } from 'react';
+import { Tooltip } from '@/components/ui/Tooltip';
 import type { WalletDetails, CreatePledgeRequest } from '@shared/types/common';
 import { useWalletBalance, usePayBTC } from 'bitcoin-wallet-adapter';
-import { useWebSocket } from '@/hooks/use-websocket';
+import { useWebSocket } from '../contexts/WebSocketContext';
 
 interface PledgeInterfaceProps {
   minPledge: number;
@@ -205,12 +206,30 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
     };
   };
 
+  // Parse human numbers like "10K", "2.5M", "10,000"
+  const parseHumanNumber = (val: unknown): number => {
+    if (typeof val === 'number' && Number.isFinite(val)) return val;
+    if (typeof val !== 'string') return 0;
+    const s = val.trim().replace(/,/g, '').toUpperCase();
+    const m = s.match(/^([0-9]*\.?[0-9]+)\s*([KMB])?$/);
+    if (!m) return Number(s) || 0;
+    const n = parseFloat(m[1]);
+    const suf = m[2];
+    const mult = suf === 'B' ? 1e9 : suf === 'M' ? 1e6 : suf === 'K' ? 1e3 : 1;
+    return n * mult;
+  };
+
   const priceUsd = useMemo(() => {
     // Prefer backend price
-    if (typeof backendPrice === 'number' && Number.isFinite(backendPrice)) return backendPrice;
-    const p = typeof btcPrice === 'number' ? btcPrice : 0;
-    return Number.isFinite(p) ? p : 0;
-  }, [btcPrice, backendPrice]);
+    if (typeof backendPrice === 'number' && Number.isFinite(backendPrice) && backendPrice > 0) return backendPrice;
+    const p = typeof btcPrice === 'number' && btcPrice > 0 ? btcPrice : 0;
+    if (p > 0) return p;
+    // Fallback derive from market cap / total raised
+    const raised = typeof auctionState?.totalRaised === 'number' ? auctionState.totalRaised : 0;
+    const mc = typeof auctionState?.currentMarketCap === 'number' ? auctionState.currentMarketCap : 0;
+    if (raised > 0 && mc > 0) return mc / raised;
+    return 0;
+  }, [btcPrice, backendPrice, auctionState?.totalRaised, auctionState?.currentMarketCap]);
 
   // Testing-mode: compute demo BTC balance from $100,000 USD
   const demoMaxBtc = useMemo(() => {
@@ -236,17 +255,49 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
     return null;
   }, [balance?.usd, convertToUSD, confirmedBtc, priceUsd]);
 
+  // Format token estimate with higher precision for small values
+  const formatTokenEstimate = (value: number): string => {
+    if (!Number.isFinite(value) || value <= 0) return '0';
+    if (value < 1) return value.toLocaleString(undefined, { maximumFractionDigits: 6 });
+    if (value < 1000) return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return Math.floor(value).toLocaleString();
+  };
+
   const estimatedTokens = useMemo(() => {
     if (!pledgeAmount) return 0;
     const amtBtc = parseFloat(pledgeAmount);
     if (!Number.isFinite(amtBtc) || amtBtc <= 0) return 0;
-    // Convert pledge BTC -> USD using priceUsd, then divide by currentPrice (USD/token)
-    if (!Number.isFinite(priceUsd) || priceUsd <= 0) return 0;
-    if (!Number.isFinite(currentPrice) || currentPrice <= 0) return 0;
-    const pledgeUsd = amtBtc * (priceUsd as number);
-    const tokens = pledgeUsd / (currentPrice as number);
-    return tokens > 0 ? Math.floor(tokens) : 0;
-  }, [pledgeAmount, priceUsd, currentPrice]);
+    const tokensOnSaleStr = auctionState?.config?.tokensOnSale ?? auctionState?.config?.totalTokens;
+    const tokensOnSale = tokensOnSaleStr ? parseHumanNumber(tokensOnSaleStr) : 0;
+    const totalRaisedBtc = typeof auctionState?.totalRaised === 'number' ? auctionState?.totalRaised : 0;
+
+    // 1) Pro‑rata share (primary): assume your pledge joins the pool now
+    //    pr = tokensOnSale * (yourBTC / (totalRaised + yourBTC))
+    let pr = 0;
+    if (tokensOnSale > 0) {
+      const denom = totalRaisedBtc + amtBtc;
+      if (denom > 0) {
+        pr = tokensOnSale * (amtBtc / denom);
+      }
+    }
+
+    // 2) USD/token fallback using effective price
+    let estUsd = 0;
+    if (Number.isFinite(priceUsd) && priceUsd > 0 && Number.isFinite(currentPrice) && currentPrice > 0) {
+      // Adjust price if backend price is against totalTokens rather than tokensOnSale
+      const totalAll = auctionState?.config?.totalTokens ? parseHumanNumber(auctionState.config.totalTokens) : 0;
+      const effectivePrice = (currentPrice > 0 && tokensOnSale > 0 && totalAll > 0)
+        ? currentPrice * (totalAll / tokensOnSale)
+        : currentPrice;
+      const pledgeUsd = amtBtc * (priceUsd as number);
+      estUsd = pledgeUsd / effectivePrice;
+      if (!(Number.isFinite(estUsd) && estUsd > 0)) estUsd = 0;
+      if (tokensOnSale > 0) estUsd = Math.min(estUsd, tokensOnSale);
+    }
+
+    const est = pr > 0 ? pr : estUsd;
+    return est > 0 ? est : 0;
+  }, [pledgeAmount, priceUsd, currentPrice, auctionState?.config?.tokensOnSale, auctionState?.config?.totalTokens, auctionState?.totalRaised]);
 
   // USD equivalent for the entered BTC amount (null when price or amount unavailable)
   const pledgeUsd = useMemo(() => {
@@ -622,10 +673,15 @@ const PledgeInterface: React.FC<PledgeInterfaceProps> = ({
       {/* Estimation note: based on current DB pledges (verified + unverified); subject to change. Hidden when zero */}
       {pledgeAmount && estimatedTokens > 0 && (
         <div className="bg-gradient-to-r from-adderrels-500/10 to-adderrels-600/10 border border-adderrels-500/30 p-4 rounded-xl mb-6">
-          <p className="text-gray-400 text-sm mb-1">Estimated ADDERRELS Tokens</p>
+          <p className="text-gray-400 text-sm mb-1 flex items-center gap-1">
+            <span>Estimated ADDERRELS Tokens</span>
+            <Tooltip text="Estimated tokens ≈ (Pledge BTC × BTC/USD) ÷ Current Token Price">
+              <span className="text-[10px] text-gray-500 cursor-help" aria-hidden>ⓘ</span>
+            </Tooltip>
+          </p>
           <div className="flex items-center space-x-2">
             <p className="text-xl font-bold text-adderrels-400" data-testid="text-estimated-tokens">
-              ~{estimatedTokens.toLocaleString()} ADDERRELS
+              ~{formatTokenEstimate(estimatedTokens)} ADDERRELS
             </p>
           </div>
           <p className="text-xs text-gray-400 mt-2">

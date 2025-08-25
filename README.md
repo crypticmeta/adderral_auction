@@ -47,6 +47,13 @@ A new background task now verifies pledge txids against mempool.space and marks 
 # Adderrels Auction Platform
 
 ## Recent Updates
+**Realtime market cap now includes queued pledges**
+  - Backend `auction_status` computes `currentMarketCap` from processed BTC (`totalBTCPledged`) plus pending queued BTC for the active auction.
+  - New field `pendingBTCPledged` (BTC) is included in the WS payload for transparency.
+  - Frontend `PledgeQueue` listens to both `pledge_created` and `pledge:created` (and verified/processed variants) to refresh promptly across clients.
+**UI tooltips for formulas**
+  - Current Market Cap cards show a tooltip explaining: `(Processed BTC + Queued BTC) × BTC/USD`.
+  - Allocation estimates show a tooltip: `Estimated tokens ≈ (Pledge BTC × BTC/USD) ÷ Current Token Price`.
 **Tokens On Sale integration (frontend + WS)**
   - Backend `auction_status` payload includes `tokensOnSale` (fallbacks to `totalTokens` when missing).
   - Frontend maps it in `frontend/src/contexts/WebSocketContext.tsx` → `AuctionState.config.tokensOnSale` with null-safe parsing.
@@ -535,11 +542,11 @@ Refund mechanism:
 
 ### Server to Client
 - `auction_status` - Periodic auction status updates (also requested immediately after pledge events on the client)
-- `pledge_created` - New pledge created
-- `pledge_verified` - Pledge verification status
-- `pledge:processed` - Pledge has been processed from the queue
+  - Payload adds `pendingBTCPledged` and `currentMarketCap` reflects processed + queued BTC.
+- `pledge_created` / `pledge:created` - New pledge created (supports both naming styles in FE)
+- `pledge_verified` / `pledge:processed` - Pledge verified/processed events
 - `pledge:queue:position` - Update on pledge position in queue
-- `queue:updated` - General queue update notification
+- `pledge:queue:update` - General queue update notification
 
 ## Tech Stack
 

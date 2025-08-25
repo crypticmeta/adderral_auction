@@ -167,13 +167,19 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
 
     // Set up WebSocket listeners for real-time queue updates
     if (socket && isAuthenticated) {
-      socket.on('pledge:created', (data: any) => { if (data?.auctionId === auctionId) debounceFetch(); });
+      // Created events (support both naming styles)
+      const onCreated = (data: any) => { if (!data || data?.auctionId === auctionId) debounceFetch(); };
+      socket.on('pledge:created', onCreated);
+      socket.on('pledge_created', onCreated);
 
-      socket.on('pledge:processed', (data: any) => {
-        if (data?.auctionId === auctionId) debounceFetch();
-      });
+      // Processed/verified events
+      const onProcessed = (data: any) => { if (!data || data?.auctionId === auctionId) debounceFetch(); };
+      socket.on('pledge:processed', onProcessed);
+      socket.on('pledge_verified', onProcessed);
 
-      socket.on('pledge:queue:update', (d: any) => { if (!d || d?.auctionId === auctionId) debounceFetch(); });
+      // Queue updates and position events
+      const onQueueUpdate = (d: any) => { if (!d || d?.auctionId === auctionId) debounceFetch(); };
+      socket.on('pledge:queue:update', onQueueUpdate);
 
       // Optional: update live queue position for a pledge
       socket.on('pledge:queue:position', (payload: QueuePositionEvent) => {
@@ -189,7 +195,9 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
       if (timerRef.id) clearTimeout(timerRef.id);
       if (socket) {
         socket.off('pledge:created');
+        socket.off('pledge_created');
         socket.off('pledge:processed');
+        socket.off('pledge_verified');
         socket.off('pledge:queue:update');
         socket.off('pledge:queue:position');
       }

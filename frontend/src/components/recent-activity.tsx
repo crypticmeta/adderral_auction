@@ -3,8 +3,10 @@
 // and estimated ADDERRELS allocations computed from current auction totals.
 // Simplified: derives display from activities only (pledges-based), no queue merging.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Tooltip } from '@/components/ui/Tooltip';
 import type { AuctionActivity } from '@shared/types/auction';
 import { useWebSocket } from '../contexts/WebSocketContext';
+import { useWalletBalance } from 'bitcoin-wallet-adapter';
 
 interface RecentActivityProps {
     activities: AuctionActivity[];
@@ -14,6 +16,7 @@ interface RecentActivityProps {
 export function RecentActivity({ activities = [], isConnected = false }: RecentActivityProps) {
     const { auctionState } = useWebSocket();
     // auctionState is used for estimating allocations; no external queue fetching
+    const { btcPrice } = useWalletBalance();
 
 
     const formatAddress = (address: string | null | undefined) => {
@@ -49,16 +52,58 @@ export function RecentActivity({ activities = [], isConnected = false }: RecentA
         return Number(num).toLocaleString(undefined, { maximumFractionDigits: maxFrac });
     };
 
+    // Formats token estimates with higher precision for small values
+    const formatTokenEstimate = (value: number): string => {
+        if (!isFinite(value)) return '0';
+        if (value === 0) return '0';
+        if (value < 1) return value.toLocaleString(undefined, { maximumFractionDigits: 6 });
+        if (value < 1000) return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+        return Math.floor(value).toLocaleString();
+    };
+
+    // Parse human numbers like "10K", "2.5M", "10,000"
+    const parseHumanNumber = (val: unknown): number => {
+        if (typeof val === 'number' && isFinite(val)) return val;
+        if (typeof val !== 'string') return 0;
+        const s = val.trim().replace(/,/g, '').toUpperCase();
+        const m = s.match(/^([0-9]*\.?[0-9]+)\s*([KMB])?$/);
+        if (!m) return Number(s) || 0;
+        const n = parseFloat(m[1]);
+        const suf = m[2];
+        const mult = suf === 'B' ? 1e9 : suf === 'M' ? 1e6 : suf === 'K' ? 1e3 : 1;
+        return n * mult;
+    };
+
     const estimateAllocation = (btcAmountStr: string | null | undefined): number | null => {
         if (!btcAmountStr) return null;
         const pledgeBTC = Number(btcAmountStr);
         if (!(pledgeBTC > 0)) return null;
-        const totalTokensStr = auctionState?.config?.totalTokens;
+        // Preferred: USD/token formula if we can derive both prices
+        const rawPrice = typeof auctionState?.currentPrice === 'number' ? auctionState?.currentPrice : 0;
+        const totalTokensAll = auctionState?.config?.totalTokens ? parseHumanNumber(auctionState.config.totalTokens) : 0;
+        const tokensOnSale = auctionState?.config?.tokensOnSale ? parseHumanNumber(auctionState.config.tokensOnSale) : 0;
+        // Adjust price if backend price is based on totalTokens rather than tokensOnSale
+        const effectivePrice = rawPrice > 0 && tokensOnSale > 0 && totalTokensAll > 0
+          ? rawPrice * (totalTokensAll / tokensOnSale)
+          : rawPrice;
+        const raised = typeof auctionState?.totalRaised === 'number' ? auctionState.totalRaised : 0;
+        const btcUsd = typeof btcPrice === 'number' && btcPrice > 0
+          ? btcPrice
+          : (raised > 0 && auctionState?.currentMarketCap)
+            ? (auctionState.currentMarketCap / raised)
+            : 0;
+        if (effectivePrice > 0 && btcUsd > 0) {
+            const tokens = (pledgeBTC * btcUsd) / effectivePrice;
+            return Number.isFinite(tokens) && tokens > 0 ? tokens : 0;
+        }
+        // Fallback: pro-rata based on tokensOnSale and totalRaised BTC
+        const totalTokensStr = auctionState?.config?.tokensOnSale ?? auctionState?.config?.totalTokens;
         const totalRaisedBTC = auctionState?.totalRaised;
         if (!totalTokensStr || typeof totalRaisedBTC !== 'number' || !(totalRaisedBTC > 0)) return null;
-        const totalTokens = Number(totalTokensStr);
+        const totalTokens = parseHumanNumber(totalTokensStr);
         if (!(totalTokens > 0)) return null;
-        return (totalTokens / totalRaisedBTC) * pledgeBTC;
+        const prorata = (totalTokens / totalRaisedBTC) * pledgeBTC;
+        return Number.isFinite(prorata) && prorata > 0 ? prorata : 0;
     };
 
     const formatTimeAgo = (timestamp: string | Date | null | undefined) => {
@@ -190,15 +235,19 @@ export function RecentActivity({ activities = [], isConnected = false }: RecentA
                                             </span>
                                         )}
                                     </p>
-                                    <p className="text-sm text-gray-400" data-testid={`activity-tokens-${activity.id}`}>
+                                    <p className="text-sm text-gray-400 flex items-center gap-1" data-testid={`activity-tokens-${activity.id}`}>
                                         ~{(() => {
-                                            const est = estimateAllocation(activity?.btcAmount);
-                                            if (est == null) {
-                                                // fallback to payload if provided
-                                                return activity?.estimatedTokens ? Number(activity.estimatedTokens).toLocaleString() : '0';
-                                            }
-                                            return Number(est).toLocaleString(undefined, { maximumFractionDigits: 2 });
+                                            // Compute locally to align with UI formula; fall back to server field only if needed
+                                            const computed = estimateAllocation(activity?.btcAmount);
+                                            const est = (computed != null && computed > 0)
+                                              ? computed
+                                              : (activity?.estimatedTokens != null ? Number(activity.estimatedTokens) : null);
+                                            const display = est != null ? formatTokenEstimate(Number(est)) : '0';
+                                            return display;
                                         })()} ADDERRELS*
+                                        <Tooltip text="Estimated tokens ≈ (Pledge BTC × BTC/USD) ÷ Current Token Price">
+                                          <span className="text-[10px] text-gray-500 cursor-help" aria-hidden>ⓘ</span>
+                                        </Tooltip>
                                         {activity?.isRefunded && (
                                             <span className="ml-1 text-xs text-amber-400">(refunded)</span>
                                         )}
