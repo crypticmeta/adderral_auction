@@ -256,13 +256,26 @@ export const sendAuctionStatus = async (socket: any) => {
     let pendingDbBtc = 0;
     try {
       const [confirmedAgg, pendingAgg] = await Promise.all([
+        // Treat verified as confirmed for totals; exclude refunds
         prisma.pledge.aggregate({
           _sum: { satAmount: true },
-          where: { auctionId: auction.id, processed: true, needsRefund: false }
+          where: {
+            auctionId: auction.id,
+            needsRefund: false,
+            OR: [
+              { processed: true },
+              { verified: true }
+            ]
+          }
         }),
+        // Pending are those not yet processed and not yet verified
         prisma.pledge.aggregate({
           _sum: { satAmount: true },
-          where: { auctionId: auction.id, processed: false }
+          where: {
+            auctionId: auction.id,
+            processed: false,
+            verified: false
+          }
         })
       ]);
       confirmedBtc = Number(confirmedAgg._sum?.satAmount || 0) / 1e8;

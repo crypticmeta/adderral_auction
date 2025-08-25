@@ -47,6 +47,13 @@ A new background task now verifies pledge txids against mempool.space and marks 
 # Adderrels Auction Platform
 
 ## Recent Updates
+**WS pledge events scoped by auctionId**
+  - Backend now includes `auctionId` in `pledge:queue:update`, `pledge:queue:position`, and `pledge:processed` payloads.
+  - Frontend listeners in `frontend/src/components/PledgeQueue.tsx` filter refreshes by matching `auctionId` to the active auction.
+**Queue endpoint returns only unprocessed + normalized positions**
+  - `GET /api/auction/:auctionId/pledges` now returns only unprocessed pledges for the auction (queue view purpose).
+  - `queuePosition` is normalized: values not in queue are returned as `null` (instead of `-1`) for cleaner UI display.
+  - User-scoped pledge endpoints also normalize `queuePosition` to `null` when not in queue.
 **Realtime market cap now includes queued pledges**
   - Backend `auction_status` computes `currentMarketCap` from processed BTC (`totalBTCPledged`) plus pending queued BTC for the active auction.
   - New field `pendingBTCPledged` (BTC) is included in the WS payload for transparency.
@@ -55,10 +62,13 @@ A new background task now verifies pledge txids against mempool.space and marks 
   - `auction_status` confirmed BTC comes from DB aggregates of processed, non-refunded pledges; pending BTC combines DB unprocessed pledges + Redis queue.
   - `currentMarketCap` and `currentPrice` derive from these computed values; `priceError` is preserved when BTC price is unavailable.
   - In `backend/src/controllers/pledgeController.ts#processNextPledge`, the USD ceiling (`ceilingMarketCap`) is converted to BTC using the live BTC price before comparing to confirmed BTC totals.
-**Your Pledges identity + live refresh**
+- **Your Pledges identity + live refresh**
   - `frontend/src/components/YourPledges.tsx` now fetches by connected wallet cardinal address when available, falling back to `guestId`.
   - Auto-refreshes on websocket pledge events: `pledge_created`, `pledge:created`, `pledge_verified`, `pledge:processed`, `pledge:queue:update`, `pledge:queue:position`.
   - Corrected API path to match backend: `GET /api/pledges/auction/:auctionId/cardinal/:cardinalAddress`.
+  - UX: Distinct badges for "Verified" (on-chain confirmed) vs "Processed" (post-queue accounting).
+  - Queue position is now hidden only when `processed === true`. Verified-but-unprocessed pledges continue to show live position.
+  - Backend display logic: user-facing pledge endpoints set `queuePosition = null` only when actually processed (do not collapse verified into processed). File: `backend/src/controllers/pledgeController.ts`.
 **Sticky Market Cap/Price during transient price errors**
   - `frontend/src/contexts/WebSocketContext.tsx` preserves last non-zero `currentMarketCap`, `currentPrice`, and `progressPercentage` when `auction_status` reports `priceError` or zeros.
   - Prevents the UI from flashing/resetting to zero during upstream price fetch hiccups.

@@ -51,8 +51,8 @@ export class PledgeQueueService {
       // Add to sorted set with timestamp as score
       await redisClient.zadd(this.QUEUE_KEY, timestamp, JSON.stringify(pledge));
       
-      // Broadcast queue update via WebSocket if available
-      this.broadcastQueueUpdate();
+      // Broadcast queue update via WebSocket if available (scope by auctionId)
+      this.broadcastQueueUpdate(pledge.auctionId);
       
       return true;
     } catch (error) {
@@ -119,8 +119,8 @@ export class PledgeQueueService {
       // Add to processed set to keep track
       await redisClient.sadd(this.PROCESSED_SET_KEY, JSON.stringify(pledge));
       
-      // Broadcast queue update
-      this.broadcastQueueUpdate();
+      // Broadcast queue update scoped to the affected auction
+      this.broadcastQueueUpdate(pledge.auctionId);
       
       return pledge;
     } catch (error) {
@@ -197,12 +197,13 @@ export class PledgeQueueService {
   /**
    * Broadcast queue update to all connected clients
    */
-  private async broadcastQueueUpdate(): Promise<void> {
+  private async broadcastQueueUpdate(auctionId?: string): Promise<void> {
     if (!this.io) return;
     
     try {
       const pledges = await this.getAllPledges();
       this.io.emit('pledge:queue:update', {
+        auctionId,
         queueLength: pledges.length,
         pledges: pledges
       });

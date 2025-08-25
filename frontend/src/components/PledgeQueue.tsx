@@ -67,13 +67,14 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
   }, [auctionState?.totalRaised, queuedPledges]);
 
   const estimateAllocation = (btcAmount: number): number | null => {
-    const totalTokensStr = auctionState?.config?.totalTokens;
+    const cfg = auctionState?.config;
+    const tokensOnSaleStr = (cfg as any)?.tokensOnSale ?? (cfg as any)?.totalTokens;
     const totalRaisedBTC = totalRaisedApproxBTC;
-    if (!totalTokensStr || !(totalRaisedBTC > 0)) return null;
-    const totalTokens = Number(totalTokensStr);
-    if (!(totalTokens > 0)) return null;
-    // tokens = (totalTokens / totalRaisedBTC) * pledgeBTC
-    return (totalTokens / totalRaisedBTC) * btcAmount;
+    if (!tokensOnSaleStr || !(totalRaisedBTC > 0)) return null;
+    const tokensOnSale = Number(tokensOnSaleStr);
+    if (!(tokensOnSale > 0)) return null;
+    // tokens = (tokensOnSale / totalRaisedBTC) * pledgeBTC
+    return (tokensOnSale / totalRaisedBTC) * btcAmount;
   };
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
   useEffect(() => {
@@ -131,7 +132,8 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
             satsAmount: Number.isFinite(sats) ? sats : 0,
             timestamp: p?.timestamp ?? '',
             queuePosition: p?.queuePosition ?? null,
-            processed: Boolean(p?.verified || (p?.status === 'verified') || (Number(p?.confirmations ?? 0) > 0)),
+            // processed is authoritative from backend; do not infer from verification
+            processed: Boolean(p?.processed === true),
             needsRefund: Boolean(p?.status === 'refunded' || p?.status === 'pending_refund'),
             user: p?.user ? {
               cardinal_address: p.user.cardinal_address ?? null,
@@ -139,7 +141,14 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
             } : undefined,
           } as PledgeItem;
         }) : [];
-        if (mountedRef.current) setQueuedPledges(mapped);
+        if (mountedRef.current) {
+          // Preserve any known queuePosition if the refetch returns null (avoid race with socket updates)
+          setQueuedPledges(prev => mapped.map(m => {
+            const prevItem = prev.find(x => x.id === m.id);
+            const queuePosition = (m.queuePosition != null ? m.queuePosition : (prevItem?.queuePosition ?? null));
+            return { ...m, queuePosition };
+          }));
+        }
       } catch (err) {
         if (mountedRef.current) setError(err instanceof Error ? err.message : 'Failed to fetch pledges');
       } finally {
@@ -181,13 +190,15 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
       const onQueueUpdate = (d: any) => { if (!d || d?.auctionId === auctionId) debounceFetch(); };
       socket.on('pledge:queue:update', onQueueUpdate);
 
-      // Optional: update live queue position for a pledge
-      socket.on('pledge:queue:position', (payload: QueuePositionEvent) => {
-        const pledgeId = payload?.pledgeId || payload?.id;
-        const pos = payload?.position ?? payload?.queuePosition;
-        if (!pledgeId || pos == null) return;
+      // Optional: update live queue position for a pledge (scoped by auction)
+      socket.on('pledge:queue:position', (payload: QueuePositionEvent & { auctionId?: string }) => {
+        if (payload?.auctionId && payload.auctionId !== auctionId) return;
+        const pledgeId = payload?.pledgeId || (payload as any)?.id;
+        const posRaw = (payload as any)?.position ?? (payload as any)?.queuePosition;
+        if (!pledgeId || posRaw == null) return;
         if (!mountedRef.current) return;
-        setQueuedPledges(prev => prev.map(p => p.id === pledgeId ? { ...p, queuePosition: Number(pos) } : p));
+        const posNum = Number(posRaw);
+        setQueuedPledges(prev => prev.map(p => p.id === pledgeId ? { ...p, queuePosition: (Number.isFinite(posNum) && posNum >= 1) ? posNum : null } : p));
       });
     }
 

@@ -150,14 +150,18 @@ export const getUserPledgesByCardinal = async (req: Request, res: Response) => {
 
     const enrichedPledges = await Promise.all(pledges.map(async (pledge) => {
       const position = await pledgeQueueService.getPledgePosition(pledge.id);
-      const { processed, needsRefund } = await pledgeQueueService.getPledgeProcessedStatus(pledge.id);
+      const svc = await pledgeQueueService.getPledgeProcessedStatus(pledge.id);
+      // Display processed ONLY when actually processed by queue/business logic
+      const isProcessed = Boolean(pledge.processed || svc.processed);
+      const needsRefund = Boolean(pledge.needsRefund || svc.needsRefund);
       const sat = (pledge as any).satAmount ?? 0;
       return {
         ...pledge,
         // canonical exposure
         satsAmount: sat,
-        queuePosition: position,
-        processed,
+        // show queue position until truly processed (verified alone keeps position visible)
+        queuePosition: isProcessed ? null : (position >= 1 ? position : null),
+        processed: isProcessed,
         needsRefund
       };
     }));
@@ -383,8 +387,8 @@ export const createPledge = async (req: Request, res: Response) => {
     // Broadcast the pledge creation event
     if (io) {
       broadcastPledgeCreated(io, pledge as any);
-      // Also broadcast queue position separately
-      io.emit('pledge:queue:position', { pledgeId: pledge.id, position: queuePosition });
+      // Also broadcast queue position separately (include auctionId for client-side scoping)
+      io.emit('pledge:queue:position', { pledgeId: pledge.id, position: queuePosition, auctionId: pledge.auctionId });
     }
 
     return res.status(201).json({
@@ -415,9 +419,9 @@ export const getPledges = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Auction ID is required' });
     }
 
-    // Get only UNCONFIRMED (not verified) pledges for this auction, oldest first
+    // Get only UNPROCESSED pledges for this auction, oldest first
     const pledges = await prisma.pledge.findMany({
-      where: { auctionId, verified: false },
+      where: { auctionId, processed: false },
       orderBy: { timestamp: 'asc' },
       include: {
         user: {
@@ -436,7 +440,8 @@ export const getPledges = async (req: Request, res: Response) => {
       return {
         ...pledge,
         satsAmount: (pledge as any).satAmount ?? 0,
-        queuePosition: position,
+        // map -1 (not in queue) to null for cleaner UI display
+        queuePosition: position >= 1 ? position : null,
         processed,
         needsRefund
       };
@@ -479,12 +484,14 @@ export const getUserPledges = async (req: Request, res: Response) => {
     // Enrich pledges with queue position, processed status, refund status, and canonical satsAmount
     const enrichedPledges = await Promise.all(pledges.map(async (pledge) => {
       const position = await pledgeQueueService.getPledgePosition(pledge.id);
-      const { processed, needsRefund } = await pledgeQueueService.getPledgeProcessedStatus(pledge.id);
+      const svc = await pledgeQueueService.getPledgeProcessedStatus(pledge.id);
+      const isProcessed = Boolean(pledge.processed || svc.processed);
+      const needsRefund = Boolean(pledge.needsRefund || svc.needsRefund);
       return {
         ...pledge,
         satsAmount: (pledge as any).satAmount ?? 0,
-        queuePosition: position,
-        processed,
+        queuePosition: isProcessed ? null : (position >= 1 ? position : null),
+        processed: isProcessed,
         needsRefund
       };
     }));
@@ -635,11 +642,12 @@ export const processNextPledge = async (req: Request, res: Response) => {
       }
     });
     
-    // Broadcast pledge processed event
+    // Broadcast pledge processed event (include auctionId for client-side scoping)
     if (io) {
-      io.emit('pledge:processed', { 
-        pledgeId: pledge.id, 
-        needsRefund: pledge.needsRefund || false 
+      io.emit('pledge:processed', {
+        pledgeId: pledge.id,
+        needsRefund: pledge.needsRefund || false,
+        auctionId
       });
     }
     
