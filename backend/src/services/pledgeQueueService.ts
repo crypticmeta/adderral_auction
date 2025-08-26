@@ -6,14 +6,22 @@
 import { redisClient } from '../config/redis';
 import { Server } from 'socket.io';
 import type { QueuedPledge } from '@shared/types';
+import config from '../config/config';
 
 export class PledgeQueueService {
   private static instance: PledgeQueueService;
-  private readonly QUEUE_KEY = 'auction:pledge:queue';
-  private readonly PROCESSED_SET_KEY = 'auction:pledge:processed';
+  private PREFIX: string;
+  private QUEUE_KEY: string;
+  private PROCESSED_SET_KEY: string;
   private io: Server | null = null;
 
-  private constructor() {}
+  private constructor() {
+    const env = (process.env.NODE_ENV || 'development').toLowerCase();
+    const net = (config.btcNetwork || 'mainnet').toLowerCase();
+    this.PREFIX = `${env}:${net}`;
+    this.QUEUE_KEY = `${this.PREFIX}:auction:pledge:queue`;
+    this.PROCESSED_SET_KEY = `${this.PREFIX}:auction:pledge:processed`;
+  }
 
   public static getInstance(): PledgeQueueService {
     if (!PledgeQueueService.instance) {
