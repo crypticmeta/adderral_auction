@@ -376,6 +376,39 @@ adderrels-auction/
    yarn test:coverage
    ```
 
+### Pledge Processor (Scheduler)
+
+- Purpose: drains the Redis FCFS pledge queue and applies ceiling logic to accept pledges or mark them `needsRefund`.
+- Location: in-process at `backend/src/services/scheduledTasks.ts` (`startPledgeQueueProcessing`)
+- How it works:
+  - Fetches active auctions for the configured network.
+  - Converts USD ceiling to BTC using live price (`BitcoinPriceService`).
+  - Repeatedly pops earliest pledge from Redis (`PledgeQueueService.processNextPledge`) and updates the DB:
+    - `processed: true`, `needsRefund: false` for accepted pledges (increments `auction.totalBTCPledged`).
+    - `processed: true`, `needsRefund: true` when adding the pledge would exceed the ceiling.
+  - Chain confirmation is handled separately and does not affect FCFS ordering.
+
+In-process (recommended for single-instance deploys)
+
+- Enable via env and it will start with the API:
+
+```bash
+PLEDGE_PROCESSOR_ENABLED=true yarn dev
+```
+
+- Uses Socket.IO to broadcast updates directly from the server process.
+
+Config (env):
+
+- `QUEUE_PROCESS_INTERVAL_MS` (default `2000`) — scheduler tick interval
+- `QUEUE_MAX_PER_TICK` (default `10`) — max pledges to process per tick per auction
+
+Notes:
+
+- Requires Redis, Postgres, and BTC price availability to progress.
+- Processes only active auctions scoped to backend `BTC_NETWORK`.
+ - Optimized for single-server, short-lived deployment.
+
 ### DB Migration (after schema changes)
 
 From `backend/` run:

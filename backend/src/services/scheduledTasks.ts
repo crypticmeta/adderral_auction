@@ -10,11 +10,14 @@ import { redisClient } from '../config/redis';
 import { txConfirmationService } from './txConfirmationService';
 import { logger } from '../utils/logger';
 import type { Server } from 'socket.io';
+import pledgeQueueService from './pledgeQueueService';
+import config from '../config/config';
 
 // Prisma client provided by singleton
 
 let priceInterval: NodeJS.Timeout | null = null;
 let txCheckInterval: NodeJS.Timeout | null = null;
+let pledgeProcessorInterval: NodeJS.Timeout | null = null;
 
 // Check for expired auctions every minute
 export const startAuctionTimeCheck = () => {
@@ -73,6 +76,104 @@ export const startTxConfirmationChecks = (io: Server) => {
   }, 30 * 1000);
   if (txCheckInterval && typeof (txCheckInterval as any).unref === 'function') {
     (txCheckInterval as any).unref();
+  }
+};
+
+// Periodically drain the FCFS pledge queue and enforce ceiling per auction
+export const startPledgeQueueProcessing = (io: Server) => {
+  logger.info('Starting in-process pledge queue processor');
+
+  // ensure queue service can emit WS updates
+  pledgeQueueService.setSocketServer(io);
+
+  const intervalMs = parseInt(process.env.QUEUE_PROCESS_INTERVAL_MS || '2000', 10);
+  const maxPerTick = parseInt(process.env.QUEUE_MAX_PER_TICK || '10', 10);
+
+  const tick = async () => {
+    try {
+      const btcPrice = await bitcoinPriceService.getBitcoinPrice();
+      if (!btcPrice || btcPrice <= 0) return;
+
+      let processedCount = 0;
+      while (processedCount < maxPerTick) {
+        // Peek the next pledge globally (FCFS)
+        const all = await pledgeQueueService.getAllPledges();
+        if (!all || all.length === 0) break;
+        const next = all[0];
+
+        // Fetch its auction and compute ceiling for that specific auction
+        const auction = await prisma.auction.findUnique({
+          where: { id: next.auctionId },
+          select: { id: true, isActive: true, isCompleted: true, network: true, ceilingMarketCap: true, totalBTCPledged: true },
+        });
+        if (!auction || !auction.isActive || auction.isCompleted) {
+          // Pop and mark as refund since auction is not active
+          const pledge = await pledgeQueueService.processNextPledge(0, 0);
+          if (pledge) {
+            await prisma.pledge.update({ where: { id: pledge.id }, data: { processed: true, needsRefund: true } });
+          }
+          processedCount++;
+          continue;
+        }
+
+        // Ensure network matches current backend mode
+        const expectedNet = config.btcNetwork === 'mainnet' ? 'MAINNET' : 'TESTNET';
+        if (auction.network !== expectedNet) {
+          // Pop and mark refund; pledge belongs to different network deployment
+          const pledge = await pledgeQueueService.processNextPledge(0, 0);
+          if (pledge) {
+            await prisma.pledge.update({ where: { id: pledge.id }, data: { processed: true, needsRefund: true } });
+          }
+          processedCount++;
+          continue;
+        }
+
+        const ceilingBTC = auction.ceilingMarketCap / btcPrice;
+        const currentTotal = auction.totalBTCPledged || 0;
+
+        // Now process the next pledge atomically with correct ceiling context
+        const pledge = await pledgeQueueService.processNextPledge(ceilingBTC, currentTotal);
+        if (!pledge) break; // race: queue became empty
+
+        // Update DB based on result
+        if (!pledge.needsRefund) {
+          const newTotal = currentTotal + pledge.btcAmount;
+          await prisma.auction.update({ where: { id: auction.id }, data: { totalBTCPledged: newTotal } });
+        }
+
+        await prisma.pledge.update({
+          where: { id: pledge.id },
+          data: { processed: true, needsRefund: !!pledge.needsRefund },
+        });
+
+        if (!pledge.needsRefund) {
+          await broadcastAuctionUpdate(auction.id).catch(() => {});
+        }
+
+        processedCount++;
+      }
+    } catch (e) {
+      logger.error('Pledge processor tick error:', e);
+    }
+  };
+
+  // Run immediately, then on interval
+  tick().catch(() => {});
+
+  if (pledgeProcessorInterval) {
+    clearInterval(pledgeProcessorInterval);
+    pledgeProcessorInterval = null;
+  }
+  pledgeProcessorInterval = setInterval(() => { tick().catch(() => {}); }, intervalMs);
+  if (pledgeProcessorInterval && typeof (pledgeProcessorInterval as any).unref === 'function') {
+    (pledgeProcessorInterval as any).unref();
+  }
+};
+
+export const stopPledgeQueueProcessing = () => {
+  if (pledgeProcessorInterval) {
+    clearInterval(pledgeProcessorInterval);
+    pledgeProcessorInterval = null;
   }
 };
 
