@@ -29,10 +29,27 @@ export class TxConfirmationService {
     return network === 'TESTNET' ? test : main;
   }
 
-  private async getTxStatus(txid: string, network: BtcNetwork): Promise<{ confirmed: boolean; confirmations: number; fee?: number } | null> {
-    // TESTING short-circuit: randomly return confirmed
+  private async getTxStatus(txid: string, network: BtcNetwork, pledgeTimestamp?: Date): Promise<{ confirmed: boolean; confirmations: number; fee?: number } | null> {
+    // TESTING short-circuit: confirm between 3-10 minutes after pledge time (deterministic per txid)
     if (config.testing) {
-      const confirmed = Math.random() < 0.5; // 50% chance
+      const minMin = parseInt(process.env.TEST_CONFIRM_MIN_MINUTES || '3', 10);
+      const maxMin = parseInt(process.env.TEST_CONFIRM_MAX_MINUTES || '10', 10);
+      const min = Math.max(1, Math.min(minMin, maxMin));
+      const max = Math.max(min, maxMin);
+      const range = max - min + 1;
+
+      // Simple deterministic hash from txid
+      let hash = 0;
+      for (let i = 0; i < txid.length; i++) {
+        hash = (hash * 31 + txid.charCodeAt(i)) >>> 0;
+      }
+      const thresholdMinutes = min + (hash % range);
+
+      const now = Date.now();
+      const ts = pledgeTimestamp ? new Date(pledgeTimestamp).getTime() : now;
+      const elapsedMinutes = Math.max(0, Math.floor((now - ts) / 60000));
+
+      const confirmed = elapsedMinutes >= thresholdMinutes;
       return { confirmed, confirmations: confirmed ? 1 : 0 };
     }
 
@@ -81,7 +98,7 @@ export class TxConfirmationService {
         const txid = pledge.txid;
         if (!txid) continue; // null check
 
-        const result = await this.getTxStatus(txid, pledge.network);
+        const result = await this.getTxStatus(txid, pledge.network, pledge.timestamp as any);
         if (!result) continue;
 
         const updateData: any = {

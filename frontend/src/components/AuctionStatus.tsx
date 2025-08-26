@@ -106,7 +106,7 @@ const AuctionStatus: React.FC = () => {
             <div className="flex justify-between mb-2">
               <span className="text-sm font-medium text-gray-400 flex items-center gap-1">
                 {formatUSD(auctionState.currentMarketCap)} / {formatUSD(auctionState.ceilingMarketCap)}
-                <Tooltip text="Current Market Cap = (Processed BTC + Queued BTC) × BTC/USD">
+                <Tooltip text="Current Market Cap = (Confirmed BTC + Queued BTC) × BTC/USD">
                   <span className="text-[10px] text-gray-500 cursor-help" aria-hidden>ⓘ</span>
                 </Tooltip>
               </span>
@@ -164,7 +164,7 @@ const AuctionStatus: React.FC = () => {
           
           <div className="text-gray-400 flex items-center gap-1">
             <span>Current Market Cap</span>
-            <Tooltip text="(Processed BTC + Queued BTC) × BTC/USD">
+            <Tooltip text="(Confirmed BTC + Queued BTC) × BTC/USD">
               <span className="text-[10px] text-gray-500 cursor-help" aria-hidden>ⓘ</span>
             </Tooltip>
           </div>

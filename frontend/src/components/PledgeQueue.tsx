@@ -57,13 +57,13 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
     return Number(n).toLocaleString(undefined, { maximumFractionDigits: maxFrac });
   };
 
-  // Approximation base: include all pledged (processed + pending)
+  // Approximation base: include all pledged (confirmed + pending)
   const totalRaisedApproxBTC = useMemo(() => {
-    const processedRaised = typeof auctionState?.totalRaised === 'number' ? auctionState.totalRaised : 0;
+    const confirmedRaised = typeof auctionState?.totalRaised === 'number' ? auctionState.totalRaised : 0;
     const pendingRaised = queuedPledges
-      .filter(p => !p.processed)
+      .filter(p => !p.verified)
       .reduce((acc, p) => acc + (p.satsAmount / 1e8), 0);
-    return processedRaised + pendingRaised;
+    return confirmedRaised + pendingRaised;
   }, [auctionState?.totalRaised, queuedPledges]);
 
   const estimateAllocation = (btcAmount: number): number | null => {
@@ -132,7 +132,9 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
             satsAmount: Number.isFinite(sats) ? sats : 0,
             timestamp: p?.timestamp ?? '',
             queuePosition: p?.queuePosition ?? null,
-            // processed is authoritative from backend; do not infer from verification
+            // prefer verified state for UI
+            verified: Boolean(p?.verified === true || (p?.confirmations ?? 0) >= 1),
+            // keep processed only to satisfy shared type; UI does not rely on it
             processed: Boolean(p?.processed === true),
             needsRefund: Boolean(p?.status === 'refunded' || p?.status === 'pending_refund'),
             user: p?.user ? {
@@ -247,7 +249,7 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
 
       {/* Queue panel */}
       <div>
-        {queuedPledges.filter(p => !p.processed).length === 0 ? (
+        {queuedPledges.filter(p => !p.verified).length === 0 ? (
           <div className="text-center py-6 text-gray-400">
             No pledges in the queue yet
           </div>
@@ -282,7 +284,7 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
                 </tr>
               </thead>
               <tbody className="bg-dark-800/30 divide-y divide-gray-700">
-                {queuedPledges.filter(p => !p.processed).slice(0, 10).map((pledge) => (
+                {queuedPledges.filter(p => !p.verified).slice(0, 10).map((pledge) => (
                   <tr key={pledge.id} className={`${isConnectedUsersPledge(pledge) ? 'bg-primary-500/10' : ''}`}>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       <div className="flex items-center gap-3">
@@ -290,17 +292,20 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
                         <span className="text-gray-200">{getUsername(pledge)}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm">{pledge.processed ? '—' : (pledge.queuePosition ?? '—')}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm">{pledge.verified ? '—' : (pledge.queuePosition ?? '—')}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       <span className="font-medium text-gray-200">{formatNumber(pledge.satsAmount / 1e8)} BTC</span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      <span className="text-gray-300">{formatNumber(estimateAllocation(pledge.satsAmount / 1e8) ?? null, 2)} ADDERRELS</span>
+                      {(() => {
+                        const est = estimateAllocation(pledge.satsAmount / 1e8);
+                        return est == null ? '—' : formatNumber(est, 2);
+                      })()}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      {pledge.processed ? (
+                      {pledge.verified ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Processed
+                          Confirmed
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -312,18 +317,12 @@ const PledgeQueue: React.FC<PledgeQueueProps> = ({ auctionId }) => {
                 ))}
               </tbody>
             </table>
-            {showInfo && (
-              <div className="px-4 py-2 text-[11px] text-gray-300 border-t border-gray-700 bg-dark-900/60">
-                Allocation approximation: tokens = (totalTokens / totalPledgedBTC) × pledgeBTC.
-                totalPledgedBTC includes processed + pending pledges. Table shows only pending pledges.
-              </div>
-            )}
             <div className="px-4 py-2 text-[11px] text-gray-400 border-t border-gray-700 bg-dark-900/40 space-y-1">
               <div>
-                Note: Expected allocation is an approximation based on total tokens and total pledged (processed + pending) and may change as pledges are processed.
+                Note: Expected allocation is an approximation based on total tokens and total pledged (confirmed + pending) and may change as pledges are confirmed.
               </div>
               <div>
-                Position shows a pledge's place in the processing queue (1 = next to process). It updates live as the queue changes.
+                Position shows a pledge's place in the queue (1 = next). It updates live as the queue changes.
               </div>
             </div>
           </div>
